@@ -2,6 +2,7 @@ import win32gui
 import win32con
 import win32ui
 from PIL import Image
+import numpy as np
 import mss
 import mss.tools
 import time
@@ -92,8 +93,11 @@ class WindowMonitor:
     def ocr_image(self, img: Image.Image) -> str:
         """OCR识别图像文字"""
         try:
+            # 转换PIL.Image为numpy array (EasyOCR要求的格式)
+            img_array = np.array(img)
+
             results = self.ocr_reader.readtext(
-                img,
+                img_array,
                 detail=1,
                 paragraph=False
             )
