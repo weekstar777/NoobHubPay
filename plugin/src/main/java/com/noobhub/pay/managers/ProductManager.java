@@ -20,28 +20,59 @@ public class ProductManager {
 
     public void loadProducts() {
         products.clear();
-        List<?> productList = plugin.getConfig().getList("products");
 
-        if (productList == null) {
-            plugin.getLogger().warning("No products found in config!");
+        if (!plugin.getConfig().contains("products")) {
+            plugin.getLogger().warning("No 'products' section found in config!");
+            return;
+        }
+
+        List<?> productList = plugin.getConfig().getList("products");
+        if (productList == null || productList.isEmpty()) {
+            plugin.getLogger().warning("Products list is empty!");
             return;
         }
 
         for (Object obj : productList) {
-            if (obj instanceof ConfigurationSection) {
-                ConfigurationSection section = (ConfigurationSection) obj;
-                String name = section.getString("name");
-                double price = section.getDouble("price");
-                List<String> commands = section.getStringList("commands");
-                String description = section.getString("description", "");
+            try {
+                if (obj instanceof ConfigurationSection) {
+                    ConfigurationSection section = (ConfigurationSection) obj;
+                    loadProduct(section);
+                } else if (obj instanceof java.util.Map) {
+                    // 处理Map类型（常见的YAML解析结果）
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> map = (java.util.Map<String, Object>) obj;
+                    String name = (String) map.get("name");
+                    Object priceObj = map.get("price");
+                    double price = priceObj instanceof Number ? ((Number) priceObj).doubleValue() : 0.0;
 
-                if (name != null && !commands.isEmpty()) {
-                    products.add(new Product(name, price, commands, description));
+                    @SuppressWarnings("unchecked")
+                    List<String> commands = (List<String>) map.getOrDefault("commands", new ArrayList<>());
+                    String description = (String) map.getOrDefault("description", "");
+
+                    if (name != null && !commands.isEmpty()) {
+                        products.add(new Product(name, price, commands, description));
+                    }
+                } else {
+                    plugin.getLogger().warning("Unknown product format: " + obj.getClass().getName());
                 }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Failed to load product: " + e.getMessage());
+                e.printStackTrace();
             }
         }
 
         plugin.getLogger().info("Loaded " + products.size() + " products");
+    }
+
+    private void loadProduct(ConfigurationSection section) {
+        String name = section.getString("name");
+        double price = section.getDouble("price");
+        List<String> commands = section.getStringList("commands");
+        String description = section.getString("description", "");
+
+        if (name != null && !commands.isEmpty()) {
+            products.add(new Product(name, price, commands, description));
+        }
     }
 
     public List<Product> getProducts() {
