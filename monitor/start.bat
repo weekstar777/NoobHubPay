@@ -26,10 +26,16 @@ echo Checking dependencies...
 python -c "import easyocr" > nul 2>&1
 if %errorlevel% neq 0 (
     echo [WARNING] Dependencies not installed.
-    echo Installing...
-    pip install -r requirements.txt
+    echo Installing... (this may take several minutes)
+    echo.
+    python -m pip install -r requirements.txt
     if %errorlevel% neq 0 (
-        echo [ERROR] Installation failed!
+        echo.
+        echo [ERROR] Auto-installation failed!
+        echo.
+        echo Please install manually:
+        echo   python -m pip install -r requirements.txt
+        echo.
         pause
         exit /b 1
     )
