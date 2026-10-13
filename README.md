@@ -101,7 +101,7 @@ pip install -r requirements.txt
 
 **推荐**: 使用 `setup.bat` (纯ASCII,无编码问题)
 
-**备用**: `quick-setup.bat` 或手动复制 `monitor/config.json.example`
+**备用**: 手动复制 `monitor/config.json.example` 为 `config.json`
 
 **诊断**: 运行 `diagnose.bat` 检查环境
 

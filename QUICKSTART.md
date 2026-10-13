@@ -90,7 +90,6 @@ python test_api.py
 | **setup.bat** | Generate config & key (✅ done) |
 | **build.bat** | Compile & deploy plugin |
 | **diagnose.bat** | Check environment |
-| **quick-setup.bat** | Simple config copy |
 
 ---
 
