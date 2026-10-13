@@ -125,44 +125,64 @@ class WindowMonitor:
             lines = text.split('\n')
             data = {}
 
+            # 打印识别的原始文本（调试用）
+            self.logger.info("=" * 50)
+            self.logger.info(f"OCR识别原始文本 ({method}):")
+            self.logger.info(text)
+            self.logger.info("=" * 50)
+            self.logger.info(f"需要查找的字段: {fields}")
+
             # 查找键值对
             for key, value_type in fields.items():
                 found = False
+
+                # 方式1: 查找key在某行，value在下一行
                 for i, line in enumerate(lines):
                     if key in line:
+                        self.logger.debug(f"找到key '{key}' 在第{i}行: {line}")
                         # 找到键,下一行可能是值
                         if i + 1 < len(lines):
                             value = lines[i + 1].strip()
-                            data[value_type] = value
-                            found = True
-                            break
+                            # 清理可能的符号
+                            value = value.lstrip('¥￥:：').strip()
+                            if value:
+                                data[value_type] = value
+                                found = True
+                                self.logger.info(f"✓ 找到 {key} = {value} (下一行)")
+                                break
 
+                # 方式2: 尝试在同一行查找(键:值格式)
                 if not found:
-                    # 尝试在同一行查找(键:值格式)
                     for line in lines:
                         if key in line:
-                            parts = line.split(key)
-                            if len(parts) > 1:
-                                value = parts[1].strip().lstrip(':：').strip()
-                                if value:
-                                    data[value_type] = value
-                                    found = True
-                                    break
+                            # 尝试多种分隔符
+                            for sep in [':', '：', ' ']:
+                                parts = line.split(key + sep, 1)
+                                if len(parts) > 1:
+                                    value = parts[1].strip().lstrip('¥￥:：').strip()
+                                    if value:
+                                        data[value_type] = value
+                                        found = True
+                                        self.logger.info(f"✓ 找到 {key} = {value} (同一行)")
+                                        break
+                            if found:
+                                break
 
                 if not found:
-                    self.logger.debug(f"Field '{key}' not found in text")
+                    self.logger.warning(f"✗ 未找到字段 '{key}'")
+                    self.logger.debug(f"所有识别的行: {lines}")
                     return None
 
             # 验证必需字段
             if 'player' not in data or 'product' not in data or 'amount' not in data:
-                self.logger.debug("Missing required fields")
+                self.logger.error(f"缺少必需字段! 当前数据: {data}")
                 return None
 
             # 解析金额
             amount_str = data['amount']
             amount_match = re.search(r'(\d+\.?\d*)', amount_str)
             if not amount_match:
-                self.logger.debug(f"Failed to parse amount: {amount_str}")
+                self.logger.error(f"无法解析金额: {amount_str}")
                 return None
             amount = float(amount_match.group(1))
 
@@ -174,10 +194,13 @@ class WindowMonitor:
                 raw_data=data
             )
 
+            self.logger.info(f"✓ 解析成功: {payment.player} - {payment.product} - ¥{payment.amount}")
             return payment
 
         except Exception as e:
-            self.logger.error(f"Failed to parse payment info: {e}")
+            self.logger.error(f"解析失败: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return None
 
     def send_to_server(self, payment: PaymentInfo) -> bool:
