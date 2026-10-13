@@ -14,50 +14,35 @@
 
 ## 快速开始
 
-### 1. 插件安装
+### 1. 初始化配置 (一键完成)
 
-将 `plugin/target/NoobHubPay-1.0.0.jar` 复制到服务器的 `plugins` 目录
+**运行配置工具**:
+```bash
+双击运行: setup.bat
+```
+
+会自动:
+- 生成随机密钥 (例如: P6DYTyVt7RVVMV6gZaXxJCimb9jeVobE)
+- 创建配置文件
+- 打开记事本编辑
+
+**手动修改两个配置**:
+1. `monitor\config.json` → 修改 `secret_key`
+2. `plugins\NoobHubPay\config.yml` → 修改 `secret-key`
+   
+⚠️ **重要**: 两个文件使用相同的密钥!
+
+### 2. 插件安装
 
 **依赖插件**:
 - Vault (必需)
 - Essentials 或其他经济插件 (游戏货币支付需要)
 
-### 2. 配置插件
+**部署插件**:
+- 插件已编译: `plugin/target/NoobHubPay-1.0.0.jar`
+- 或运行 `build.bat` 自动编译并部署
 
-编辑 `plugins/NoobHubPay/config.yml`:
-
-```yaml
-http-server:
-  secret-key: "修改为随机字符串"  # 重要!用于验证监控程序请求
-
-products:
-  - name: "64个钻石块"
-    price: 68.00
-    commands:
-      - "/give {player} minecraft:diamond_block 64"
-```
-
-### 3. 配置监控程序
-
-编辑 `monitor/config.json`:
-
-```json
-{
-    "http_server": {
-        "secret_key": "与插件config.yml保持一致"
-    },
-    "wechat": {
-        "window_title": "服务通知",
-        "fields": {
-            "收款金额": "amount",
-            "收款项": "product",
-            "付款方信息": "player"
-        }
-    }
-}
-```
-
-### 4. 安装Python依赖
+### 3. 安装Python依赖
 
 ```bash
 cd monitor
@@ -66,7 +51,7 @@ pip install -r requirements.txt
 
 首次运行会自动下载OCR模型(约200MB),请耐心等待。
 
-### 5. 启动
+### 4. 启动
 
 1. 启动Minecraft服务器,插件会自动启动HTTP服务器(默认端口8787)
 2. 运行监控程序: `python payment_monitor.py`
@@ -112,15 +97,23 @@ pip install -r requirements.txt
 
 ## 常见问题
 
-### 1. SLF4J日志错误
+### 配置脚本无法运行
+
+**推荐**: 使用 `setup.bat` (纯ASCII,无编码问题)
+
+**备用**: `quick-setup.bat` 或手动复制 `monitor/config.json.example`
+
+**诊断**: 运行 `diagnose.bat` 检查环境
+
+### SLF4J日志错误
 
 **症状**: `SLF4J: No SLF4J providers were found`
 
 **原因**: Paper服务器已提供SLF4J实现,插件无需内置
 
-**解决**: 已修复,使用服务器提供的SLF4J(v1.0.0+)
+**解决**: 已修复,使用服务器提供的SLF4J(v1.0.1+)
 
-### 2. HTTP服务器启动失败
+### HTTP服务器启动失败
 
 **症状**: 插件加载失败或端口错误
 
@@ -129,7 +122,7 @@ pip install -r requirements.txt
 - 修改config.yml中的port配置
 - 确认防火墙未拦截
 
-### 3. OCR识别不准确
+### OCR识别不准确
 
 **症状**: 支付通知识别失败或匹配错误
 
@@ -139,7 +132,7 @@ pip install -r requirements.txt
 - 检查 `fields` 配置与实际窗口文字完全一致
 - 查看 `payment_monitor.log` 确认OCR识别内容
 
-### 4. 支付未发货
+### 支付未发货
 
 **症状**: 收到支付但玩家未收到物品
 
@@ -150,14 +143,7 @@ pip install -r requirements.txt
 4. 查看服务器日志: `logs/latest.log`
 5. 查看监控日志: `monitor/payment_monitor.log`
 
-### 5. 密钥验证失败
-
-**症状**: HTTP 403错误,`Invalid secret key`
-
-**解决**:
-- 确保 `monitor/config.json` 和 `plugins/NoobHubPay/config.yml` 密钥完全一致
-- 注意大小写敏感
-- 使用 `init-config.bat` 自动生成配置
+详细测试步骤查看 `TESTING.md`
 
 ## 技术架构
 
