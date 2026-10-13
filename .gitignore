@@ -1,0 +1,21 @@
+# Maven
+plugin/target/
+plugin/dependency-reduced-pom.xml
+
+# Python
+monitor/__pycache__/
+monitor/*.pyc
+monitor/*.log
+monitor/.easyocr/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# 配置文件(包含密钥)
+monitor/config.json
+
+# 日志
+*.log

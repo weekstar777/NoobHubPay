@@ -1,0 +1,24 @@
+name: NoobHubPay
+version: '1.0.0'
+main: com.noobhub.pay.NoobHubPay
+api-version: '1.21'
+author: NoobHub
+description: Multi-payment system supporting WeChat, Alipay and in-game currency
+depend: [Vault]
+
+commands:
+  pay:
+    description: Open payment GUI
+    usage: /pay
+  payadmin:
+    description: Admin commands for payment system
+    usage: /payadmin <reload|test|list>
+    permission: noobhub.pay.admin
+
+permissions:
+  noobhub.pay.admin:
+    description: Admin permission for payment system
+    default: op
+  noobhub.pay.use:
+    description: Use payment system
+    default: true
