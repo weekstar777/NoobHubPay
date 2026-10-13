@@ -93,8 +93,21 @@ class WindowMonitor:
     def ocr_image(self, img: Image.Image) -> str:
         """OCR识别图像文字"""
         try:
-            # 转换PIL.Image为numpy array (EasyOCR要求的格式)
-            img_array = np.array(img)
+            # 图像预处理：放大提高识别率
+            # 将图像放大2倍
+            width, height = img.size
+            img_enlarged = img.resize((width * 2, height * 2), Image.Resampling.LANCZOS)
+
+            # 增强对比度
+            from PIL import ImageEnhance
+            enhancer = ImageEnhance.Contrast(img_enlarged)
+            img_enhanced = enhancer.enhance(2.0)  # 对比度增强2倍
+
+            # 转换为灰度图（提高OCR准确性）
+            img_gray = img_enhanced.convert('L')
+
+            # 转换为numpy array
+            img_array = np.array(img_gray)
 
             results = self.ocr_reader.readtext(
                 img_array,
@@ -109,6 +122,7 @@ class WindowMonitor:
                     # bbox格式: [[左上x,左上y], [右上x,右上y], [右下x,右下y], [左下x,左下y]]
                     y_pos = bbox[0][1]
                     texts.append((y_pos, text.strip()))
+                    self.logger.debug(f"OCR: '{text}' (confidence: {confidence:.2f})")
 
             # 按y坐标排序
             texts.sort(key=lambda x: x[0])
