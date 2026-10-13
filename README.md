@@ -112,21 +112,52 @@ pip install -r requirements.txt
 
 ## 常见问题
 
-### 1. HTTP服务器启动失败
+### 1. SLF4J日志错误
 
-检查端口8787是否被占用,可在config.yml修改端口
+**症状**: `SLF4J: No SLF4J providers were found`
 
-### 2. OCR识别不准确
+**原因**: Paper服务器已提供SLF4J实现,插件无需内置
 
-- 调整 `config.json` 中的 `confidence_threshold`
-- 确保窗口内容清晰可见
-- 检查 `fields` 配置是否与实际窗口文字匹配
+**解决**: 已修复,使用服务器提供的SLF4J(v1.0.0+)
 
-### 3. 支付未发货
+### 2. HTTP服务器启动失败
 
-查看日志:
-- 插件日志: `logs/latest.log`
-- 监控程序日志: `monitor/payment_monitor.log`
+**症状**: 插件加载失败或端口错误
+
+**排查**:
+- 检查端口8787是否被占用: `netstat -ano | findstr 8787`
+- 修改config.yml中的port配置
+- 确认防火墙未拦截
+
+### 3. OCR识别不准确
+
+**症状**: 支付通知识别失败或匹配错误
+
+**调整**:
+- 降低 `config.json` 中的 `confidence_threshold` (默认0.6)
+- 确保窗口完整可见,无遮挡
+- 检查 `fields` 配置与实际窗口文字完全一致
+- 查看 `payment_monitor.log` 确认OCR识别内容
+
+### 4. 支付未发货
+
+**症状**: 收到支付但玩家未收到物品
+
+**排查步骤**:
+1. 确认玩家在线: `/list`
+2. 检查商品名称匹配: `/payadmin list`
+3. 验证金额是否一致
+4. 查看服务器日志: `logs/latest.log`
+5. 查看监控日志: `monitor/payment_monitor.log`
+
+### 5. 密钥验证失败
+
+**症状**: HTTP 403错误,`Invalid secret key`
+
+**解决**:
+- 确保 `monitor/config.json` 和 `plugins/NoobHubPay/config.yml` 密钥完全一致
+- 注意大小写敏感
+- 使用 `init-config.bat` 自动生成配置
 
 ## 技术架构
 
@@ -163,6 +194,13 @@ pip install -r requirements.txt
   - EasyOCR (OCR识别)
 
 ## 更新日志
+
+### v1.0.1 (2026-10-13)
+- 修复SLF4J日志冲突问题
+- 使用Paper服务器提供的SLF4J实现
+- 添加build.bat编译部署脚本
+- 添加init-config.bat配置初始化工具
+- 完善故障排除文档
 
 ### v1.0.0 (2026-10-13)
 - 初始版本
