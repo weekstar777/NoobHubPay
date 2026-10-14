@@ -88,7 +88,7 @@ class WindowMonitor:
             height = y1 - y
 
             # 使用mss截图(更快更稳定)
-            with mss.mss() as sct:
+            with mss.MSS() as sct:
                 monitor = {
                     "top": y,
                     "left": x,
@@ -119,8 +119,8 @@ class WindowMonitor:
 
             # 根据OCR引擎调用不同的API
             if self.ocr_engine == 'paddleocr':
-                # PaddleOCR识别
-                results = self.ocr_reader.ocr(img_array, cls=True)
+                # PaddleOCR识别 - 使用predict方法
+                results = self.ocr_reader.predict(img_array)
 
                 # 提取文字并按位置排序
                 texts = []
