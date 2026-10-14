@@ -1,7 +1,7 @@
 import win32gui
 import win32con
 import win32ui
-from PIL import Image
+from PIL import Image, ImageEnhance
 import numpy as np
 import mss
 import mss.tools
@@ -10,9 +10,8 @@ import logging
 import json
 import re
 import requests
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 from dataclasses import dataclass
-from payment_parser_v2 import ContentMatchParser
 
 @dataclass
 class PaymentInfo:
@@ -20,7 +19,7 @@ class PaymentInfo:
     player: str
     product: str
     amount: float
-    raw_data: Dict[str, str]
+    regions_data: Dict[str, str]  # 各区域识别的原始数据
 
 class WindowMonitor:
     def __init__(self, config_path="config.json"):
@@ -45,18 +44,25 @@ class WindowMonitor:
         # 已处理的记录(防重复)
         self.processed_payments = set()
 
+        # 加载商品列表
+        self.products = [
+            {'name': '64个钻石块', 'price': 68.00},
+            {'name': '1月VIP会员', 'price': 68.00},
+            {'name': '铁套装', 'price': 50.00},
+            {'name': '32个金苹果', 'price': 100.00},
+        ]
+
         self.logger.info("WindowMonitor initialized")
 
     def _init_ocr(self):
         """初始化OCR引擎"""
         try:
-            engine = self.config['ocr'].get('engine', 'paddleocr')
+            engine = self.config['ocr'].get('engine', 'easyocr')
 
             if engine == 'paddleocr':
                 from paddleocr import PaddleOCR
-                # 使用最简化的参数初始化
                 self.ocr_reader = PaddleOCR(lang=self.config['ocr'].get('lang', 'ch'))
-                self.logger.info(f"PaddleOCR initialized with lang: {self.config['ocr'].get('lang', 'ch')}")
+                self.logger.info(f"PaddleOCR initialized")
             elif engine == 'easyocr':
                 import easyocr
                 self.ocr_reader = easyocr.Reader(
@@ -79,212 +85,231 @@ class WindowMonitor:
             return None
         return hwnd
 
-    def capture_window(self, hwnd: int) -> Optional[Image.Image]:
-        """截取窗口内容"""
+    def capture_region(self, hwnd: int, region: Dict) -> Optional[Image.Image]:
+        """截取窗口内的特定区域"""
         try:
             # 获取窗口位置
             rect = win32gui.GetWindowRect(hwnd)
-            x, y, x1, y1 = rect
-            width = x1 - x
-            height = y1 - y
+            win_x, win_y, _, _ = rect
 
-            # 使用mss截图(更快更稳定)
+            # 计算区域在屏幕上的绝对坐标
+            abs_x = win_x + region['x']
+            abs_y = win_y + region['y']
+            width = region['width']
+            height = region['height']
+
+            # 使用mss截图
             with mss.MSS() as sct:
                 monitor = {
-                    "top": y,
-                    "left": x,
+                    "top": abs_y,
+                    "left": abs_x,
                     "width": width,
                     "height": height
                 }
                 screenshot = sct.grab(monitor)
                 img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
-                return img
+
+            # 图像预处理：放大2倍+增强对比度
+            img = img.resize((width * 2, height * 2), Image.LANCZOS)
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.5)
+
+            return img
         except Exception as e:
-            self.logger.error(f"Failed to capture window: {e}")
+            self.logger.error(f"Failed to capture region: {e}")
             return None
 
     def ocr_image(self, img: Image.Image) -> str:
-        """OCR识别图像文字"""
+        """对图像进行OCR识别"""
         try:
-            # 图像预处理：放大提高识别率
-            width, height = img.size
-            img_enlarged = img.resize((width * 2, height * 2), Image.Resampling.LANCZOS)
+            img_array = np.array(img)
 
-            # 增强对比度
-            from PIL import ImageEnhance
-            enhancer = ImageEnhance.Contrast(img_enlarged)
-            img_enhanced = enhancer.enhance(1.5)
-
-            # 转换为numpy array
-            img_array = np.array(img_enhanced)
-
-            # 根据OCR引擎调用不同的API
             if self.ocr_engine == 'paddleocr':
-                # PaddleOCR识别 - 使用predict方法
-                results = self.ocr_reader.predict(img_array)
-
-                # 提取文字并按位置排序
+                result = self.ocr_reader.predict(img_array)
                 texts = []
-                if results and results[0]:
-                    for line in results[0]:
-                        bbox, (text, confidence) = line[0], line[1]
-                        if confidence >= self.config['ocr']['confidence_threshold']:
-                            # bbox格式: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                            y_pos = bbox[0][1]
-                            texts.append((y_pos, text.strip()))
-                            self.logger.debug(f"OCR: '{text}' (confidence: {confidence:.2f})")
-
+                if result and len(result) > 0:
+                    for line in result[0]:
+                        if len(line) >= 2:
+                            texts.append(line[1][0])
+                return ' '.join(texts)
             elif self.ocr_engine == 'easyocr':
-                # EasyOCR识别
-                results = self.ocr_reader.readtext(img_array, detail=1, paragraph=False)
-
-                texts = []
-                for (bbox, text, confidence) in results:
-                    if confidence >= self.config['ocr']['confidence_threshold']:
-                        y_pos = bbox[0][1]
-                        texts.append((y_pos, text.strip()))
-                        self.logger.debug(f"OCR: '{text}' (confidence: {confidence:.2f})")
-
-            # 按y坐标排序
-            texts.sort(key=lambda x: x[0])
-            full_text = '\n'.join([t[1] for t in texts])
-
-            return full_text
+                result = self.ocr_reader.readtext(img_array)
+                confidence_threshold = self.config['ocr'].get('confidence_threshold', 0.3)
+                texts = [text for _, text, conf in result if conf >= confidence_threshold]
+                return ' '.join(texts)
         except Exception as e:
-            self.logger.error(f"OCR error: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
+            self.logger.error(f"OCR failed: {e}")
             return ""
 
-    def parse_payment_info(self, text: str, method: str, fields: Dict[str, str]) -> Optional[PaymentInfo]:
-        """解析支付信息 - 使用新的内容匹配解析器"""
-        # 获取商品列表（应该从服务器或配置文件读取）
-        products = [
-            {'name': '64个钻石块', 'price': 68.00},
-            {'name': '1月VIP会员', 'price': 68.00},
-            {'name': '铁套装', 'price': 50.00},
-            {'name': '32个金苹果', 'price': 100.00},
+    def recognize_regions(self, hwnd: int, regions: Dict[str, Dict]) -> Dict[str, str]:
+        """识别所有配置的区域"""
+        results = {}
+        for region_name, region_config in regions.items():
+            img = self.capture_region(hwnd, region_config)
+            if img:
+                text = self.ocr_image(img)
+                results[region_name] = text.strip()
+                self.logger.info(f"Region '{region_name}': {text.strip()}")
+            else:
+                results[region_name] = ""
+        return results
+
+    def match_product(self, product_text: str) -> Optional[Dict]:
+        """根据收款项文本匹配商品"""
+        # 标准化文本：去除空格和特殊字符
+        normalized = re.sub(r'[^\w一-龥]', '', product_text)
+
+        for product in self.products:
+            product_normalized = re.sub(r'[^\w一-龥]', '', product['name'])
+            if product_normalized in normalized or normalized in product_normalized:
+                self.logger.info(f"Matched product: {product['name']}")
+                return product
+        return None
+
+    def extract_amount(self, amount_text: str) -> Optional[float]:
+        """从金额文本中提取数值"""
+        # 尝试各种金额格式
+        patterns = [
+            r'¥?\s*(\d+\.\d{2})',  # ¥68.00 或 68.00
+            r'(\d+\.\d+)\s*元',     # 68.00元
+            r'(\d+)',               # 纯数字
         ]
-        
-        # 使用新解析器
-        parser = ContentMatchParser(self.logger, products)
-        return parser.parse(text, method)
 
-    def send_to_server(self, payment: PaymentInfo) -> bool:
-        """发送支付通知到服务器"""
+        for pattern in patterns:
+            match = re.search(pattern, amount_text)
+            if match:
+                return float(match.group(1))
+        return None
+
+    def parse_payment_info(self, regions_data: Dict[str, str], method: str) -> Optional[PaymentInfo]:
+        """解析支付信息"""
         try:
-            # 生成唯一ID(防重复)
-            payment_id = f"{payment.method}_{payment.player}_{payment.amount}_{payment.product}"
+            # 1. 匹配商品
+            product_text = regions_data.get('收款项', '')
+            product = self.match_product(product_text)
+            if not product:
+                self.logger.warning(f"No product matched for: {product_text}")
+                return None
 
-            if payment_id in self.processed_payments:
-                self.logger.debug(f"Payment already processed: {payment_id}")
-                return False
+            # 2. 提取金额
+            amount_text = regions_data.get('收款金额', '')
+            amount = self.extract_amount(amount_text)
+            if not amount:
+                self.logger.warning(f"No amount extracted from: {amount_text}")
+                return None
 
-            # 构建请求
-            url = self.config['http_server']['url']
-            headers = {
-                'Content-Type': 'application/json',
-                'X-Secret-Key': self.config['http_server']['secret_key']
-            }
+            # 3. 验证金额与商品价格一致
+            if abs(amount - product['price']) > 0.01:
+                self.logger.warning(f"Amount mismatch: {amount} vs {product['price']}")
+                return None
+
+            # 4. 提取玩家名（原始文本，服务器端会匹配已注册玩家）
+            player_text = regions_data.get('付款方信息', '').strip()
+            if not player_text:
+                self.logger.warning("No player info found")
+                return None
+
+            return PaymentInfo(
+                method=method,
+                player=player_text,
+                product=product['name'],
+                amount=amount,
+                regions_data=regions_data
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to parse payment info: {e}")
+            return None
+
+    def send_to_server(self, payment_info: PaymentInfo) -> bool:
+        """发送支付信息到服务器"""
+        try:
             data = {
-                'method': payment.method,
-                'player': payment.player,
-                'product': payment.product,
-                'amount': payment.amount,
-                'raw_data': payment.raw_data
+                'method': payment_info.method,
+                'player': payment_info.player,
+                'product': payment_info.product,
+                'amount': payment_info.amount,
+                'regions_data': payment_info.regions_data
             }
 
-            response = requests.post(url, json=data, headers=headers, timeout=5)
+            response = requests.post(
+                self.config['http_server']['url'],
+                json=data,
+                headers={'X-Secret-Key': self.config['http_server']['secret_key']},
+                timeout=5
+            )
 
             if response.status_code == 200:
-                self.processed_payments.add(payment_id)
-                self.logger.info(f"Payment sent successfully: {payment.player} - {payment.product} - ¥{payment.amount}")
+                self.logger.info(f"Payment sent successfully: {payment_info.player} - {payment_info.product}")
                 return True
             else:
-                self.logger.error(f"Server returned error: {response.status_code} - {response.text}")
+                self.logger.error(f"Server error: {response.status_code} - {response.text}")
                 return False
-
         except Exception as e:
-            self.logger.error(f"Failed to send payment to server: {e}")
+            self.logger.error(f"Failed to send payment: {e}")
             return False
 
-    def monitor_method(self, method: str, config: dict):
-        """监控单个支付方式"""
-        window_title = config['window_title']
-        fields = config['fields']
-        interval = config['check_interval']
+    def check_window(self, method: str, window_title: str, regions: Dict[str, Dict]):
+        """检查指定窗口"""
+        hwnd = self.find_window(window_title)
+        if not hwnd:
+            return
 
-        self.logger.info(f"Starting monitor for {method}: {window_title}")
+        # 识别各区域
+        regions_data = self.recognize_regions(hwnd, regions)
 
-        last_text = ""
-        while True:
-            try:
-                # 查找窗口
-                hwnd = self.find_window(window_title)
-                if hwnd is None:
-                    time.sleep(interval)
-                    continue
+        # 解析支付信息
+        payment_info = self.parse_payment_info(regions_data, method)
+        if not payment_info:
+            return
 
-                # 截图
-                img = self.capture_window(hwnd)
-                if img is None:
-                    time.sleep(interval)
-                    continue
+        # 防重复：生成唯一标识
+        payment_id = f"{payment_info.method}_{payment_info.player}_{payment_info.product}_{payment_info.amount}"
+        if payment_id in self.processed_payments:
+            return
 
-                # OCR识别
-                text = self.ocr_image(img)
-                if not text or text == last_text:
-                    time.sleep(interval)
-                    continue
-
-                last_text = text
-                self.logger.debug(f"OCR result:\n{text}")
-
-                # 解析支付信息
-                payment = self.parse_payment_info(text, method, fields)
-                if payment is None:
-                    time.sleep(interval)
-                    continue
-
-                # 发送到服务器
-                self.send_to_server(payment)
-
-                time.sleep(interval)
-
-            except Exception as e:
-                self.logger.error(f"Error in monitor loop: {e}")
-                time.sleep(interval)
+        # 发送到服务器
+        if self.send_to_server(payment_info):
+            self.processed_payments.add(payment_id)
 
     def run(self):
-        """运行所有启用的监控"""
-        import threading
+        """主循环"""
+        self.logger.info("Monitor started")
 
-        threads = []
+        while True:
+            try:
+                # 检查微信支付
+                if self.config['wechat']['enabled']:
+                    self.check_window(
+                        'wechat',
+                        self.config['wechat']['window_title'],
+                        self.config['wechat']['regions']
+                    )
 
-        # 微信监控
-        if self.config['wechat']['enabled']:
-            t = threading.Thread(
-                target=self.monitor_method,
-                args=('wechat', self.config['wechat']),
-                daemon=True
-            )
-            t.start()
-            threads.append(t)
+                # 检查支付宝
+                if self.config['alipay']['enabled']:
+                    self.check_window(
+                        'alipay',
+                        self.config['alipay']['window_title'],
+                        self.config['alipay']['regions']
+                    )
 
-        # 支付宝监控
-        if self.config['alipay']['enabled']:
-            t = threading.Thread(
-                target=self.monitor_method,
-                args=('alipay', self.config['alipay']),
-                daemon=True
-            )
-            t.start()
-            threads.append(t)
+                # 使用最小的检查间隔
+                intervals = []
+                if self.config['wechat']['enabled']:
+                    intervals.append(self.config['wechat']['check_interval'])
+                if self.config['alipay']['enabled']:
+                    intervals.append(self.config['alipay']['check_interval'])
 
-        # 等待所有线程
-        for t in threads:
-            t.join()
+                time.sleep(min(intervals) if intervals else 2.0)
 
-if __name__ == '__main__':
+            except KeyboardInterrupt:
+                self.logger.info("Monitor stopped by user")
+                break
+            except Exception as e:
+                self.logger.error(f"Error in main loop: {e}")
+                time.sleep(5)
+
+if __name__ == "__main__":
     monitor = WindowMonitor()
     monitor.run()
+

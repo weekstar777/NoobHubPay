@@ -39,3 +39,5 @@ messages:
   product-not-found: "§c商品不存在!"
   player-offline: "§c玩家不在线,无法发货!"
   invalid-payment-method: "§c不支持的支付方式!"
+  offline-order-delivered: "§a您在离线时购买的 §e{product} §a已发货!"
+

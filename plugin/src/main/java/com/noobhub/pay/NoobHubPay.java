@@ -1,6 +1,7 @@
 package com.noobhub.pay;
 
 import com.noobhub.pay.commands.PayAdminCommand;
+import com.noobhub.pay.listeners.PlayerListener;
 import com.noobhub.pay.managers.HttpServerManager;
 import com.noobhub.pay.managers.PaymentManager;
 import com.noobhub.pay.managers.ProductManager;
@@ -28,6 +29,9 @@ public class NoobHubPay extends JavaPlugin {
         productManager = new ProductManager(this);
         paymentManager = new PaymentManager(this, economy);
         httpServerManager = new HttpServerManager(this);
+
+        // 注册监听器
+        getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
 
         // 启动HTTP服务器
         httpServerManager.start();
