@@ -1,5 +1,4 @@
-paddleocr>=2.7.0
-paddlepaddle>=2.6.0
+easyocr>=1.7.1
 pillow>=10.0.0
 pywin32>=306
 mss>=9.0.1

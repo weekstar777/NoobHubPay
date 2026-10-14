@@ -23,7 +23,7 @@ if %errorlevel% neq 0 (
 )
 
 echo Checking dependencies...
-python -c "import paddleocr" > nul 2>&1
+python -c "import easyocr" > nul 2>&1
 if %errorlevel% neq 0 (
     echo [WARNING] Dependencies not installed.
     echo Installing... (this may take several minutes)
@@ -43,13 +43,8 @@ if %errorlevel% neq 0 (
 
 echo.
 echo Starting monitor...
-echo Disabling oneDNN to avoid compatibility issues...
+echo First run will download EasyOCR models (~200MB)
 echo.
-
-REM Disable oneDNN/MKLDNN to avoid PaddlePaddle compatibility issues
-set FLAGS_use_mkldnn=false
-set PADDLE_MKLDNN_FLAGS=0
-set KMP_DUPLICATE_LIB_OK=TRUE
 
 python payment_monitor.py
 

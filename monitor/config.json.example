@@ -24,9 +24,9 @@
         "check_interval": 2.0
     },
     "ocr": {
-        "engine": "paddleocr",
-        "lang": "ch",
-        "confidence_threshold": 0.5
+        "engine": "easyocr",
+        "languages": ["ch_sim", "en"],
+        "confidence_threshold": 0.3
     },
     "log": {
         "level": "INFO",
