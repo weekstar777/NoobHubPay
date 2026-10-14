@@ -28,7 +28,7 @@ cd monitor
 pip install -r requirements.txt
 ```
 
-首次运行会下载OCR模型(约200MB)。
+首次运行会下载PaddleOCR模型(约8MB),中文识别更准确。
 
 ### 3. 启动
 
