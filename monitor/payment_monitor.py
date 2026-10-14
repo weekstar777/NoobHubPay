@@ -49,12 +49,28 @@ class WindowMonitor:
     def _init_ocr(self):
         """初始化OCR引擎"""
         try:
-            import easyocr
-            self.ocr_reader = easyocr.Reader(
-                self.config['ocr']['languages'],
-                gpu=False
-            )
-            self.logger.info(f"EasyOCR initialized with languages: {self.config['ocr']['languages']}")
+            engine = self.config['ocr'].get('engine', 'paddleocr')
+
+            if engine == 'paddleocr':
+                from paddleocr import PaddleOCR
+                self.ocr_reader = PaddleOCR(
+                    use_angle_cls=True,
+                    lang=self.config['ocr'].get('lang', 'ch'),
+                    use_gpu=False,
+                    show_log=False
+                )
+                self.logger.info(f"PaddleOCR initialized with lang: {self.config['ocr'].get('lang', 'ch')}")
+            elif engine == 'easyocr':
+                import easyocr
+                self.ocr_reader = easyocr.Reader(
+                    self.config['ocr'].get('languages', ['ch_sim', 'en']),
+                    gpu=False
+                )
+                self.logger.info(f"EasyOCR initialized")
+            else:
+                raise ValueError(f"Unknown OCR engine: {engine}")
+
+            self.ocr_engine = engine
         except Exception as e:
             self.logger.error(f"Failed to initialize OCR: {e}")
             raise
@@ -94,35 +110,43 @@ class WindowMonitor:
         """OCR识别图像文字"""
         try:
             # 图像预处理：放大提高识别率
-            # 将图像放大2倍
             width, height = img.size
             img_enlarged = img.resize((width * 2, height * 2), Image.Resampling.LANCZOS)
 
             # 增强对比度
             from PIL import ImageEnhance
             enhancer = ImageEnhance.Contrast(img_enlarged)
-            img_enhanced = enhancer.enhance(2.0)  # 对比度增强2倍
-
-            # 转换为灰度图（提高OCR准确性）
-            img_gray = img_enhanced.convert('L')
+            img_enhanced = enhancer.enhance(1.5)
 
             # 转换为numpy array
-            img_array = np.array(img_gray)
+            img_array = np.array(img_enhanced)
 
-            results = self.ocr_reader.readtext(
-                img_array,
-                detail=1,
-                paragraph=False
-            )
+            # 根据OCR引擎调用不同的API
+            if self.ocr_engine == 'paddleocr':
+                # PaddleOCR识别
+                results = self.ocr_reader.ocr(img_array, cls=True)
 
-            # 提取文字并按位置排序(从上到下,从左到右)
-            texts = []
-            for (bbox, text, confidence) in results:
-                if confidence >= self.config['ocr']['confidence_threshold']:
-                    # bbox格式: [[左上x,左上y], [右上x,右上y], [右下x,右下y], [左下x,左下y]]
-                    y_pos = bbox[0][1]
-                    texts.append((y_pos, text.strip()))
-                    self.logger.debug(f"OCR: '{text}' (confidence: {confidence:.2f})")
+                # 提取文字并按位置排序
+                texts = []
+                if results and results[0]:
+                    for line in results[0]:
+                        bbox, (text, confidence) = line[0], line[1]
+                        if confidence >= self.config['ocr']['confidence_threshold']:
+                            # bbox格式: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+                            y_pos = bbox[0][1]
+                            texts.append((y_pos, text.strip()))
+                            self.logger.debug(f"OCR: '{text}' (confidence: {confidence:.2f})")
+
+            elif self.ocr_engine == 'easyocr':
+                # EasyOCR识别
+                results = self.ocr_reader.readtext(img_array, detail=1, paragraph=False)
+
+                texts = []
+                for (bbox, text, confidence) in results:
+                    if confidence >= self.config['ocr']['confidence_threshold']:
+                        y_pos = bbox[0][1]
+                        texts.append((y_pos, text.strip()))
+                        self.logger.debug(f"OCR: '{text}' (confidence: {confidence:.2f})")
 
             # 按y坐标排序
             texts.sort(key=lambda x: x[0])
@@ -131,6 +155,8 @@ class WindowMonitor:
             return full_text
         except Exception as e:
             self.logger.error(f"OCR error: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return ""
 
     def parse_payment_info(self, text: str, method: str, fields: Dict[str, str]) -> Optional[PaymentInfo]:
