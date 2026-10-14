@@ -54,10 +54,9 @@ class WindowMonitor:
             if engine == 'paddleocr':
                 from paddleocr import PaddleOCR
                 self.ocr_reader = PaddleOCR(
-                    use_angle_cls=True,
+                    use_textline_orientation=True,
                     lang=self.config['ocr'].get('lang', 'ch'),
-                    use_gpu=False,
-                    show_log=False
+                    use_gpu=False
                 )
                 self.logger.info(f"PaddleOCR initialized with lang: {self.config['ocr'].get('lang', 'ch')}")
             elif engine == 'easyocr':
