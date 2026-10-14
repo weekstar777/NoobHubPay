@@ -176,11 +176,30 @@ class WindowMonitor:
                 for i, line in enumerate(lines):
                     if key in line:
                         self.logger.debug(f"找到key '{key}' 在第{i}行: {line}")
-                        # 找到键,下一行可能是值
-                        if i + 1 < len(lines):
+
+                        # 先尝试从当前行提取（可能是 "付款方信息:dream" 格式）
+                        if ':' in line or '：' in line:
+                            # 分割并取最后一部分
+                            for sep in [':', '：']:
+                                if sep in line:
+                                    parts = line.split(sep)
+                                    value = parts[-1].strip().lstrip('¥￥').strip()
+                                    # 过滤掉括号内容和标签
+                                    value = re.sub(r'\([^)]*\)', '', value).strip()
+                                    if value and not value.startswith('('):
+                                        data[value_type] = value
+                                        found = True
+                                        self.logger.info(f"✓ 找到 {key} = {value} (当前行提取)")
+                                        break
+                            if found:
+                                break
+
+                        # 如果当前行没找到，尝试下一行
+                        if not found and i + 1 < len(lines):
                             value = lines[i + 1].strip()
-                            # 清理可能的符号
+                            # 清理符号和括号内容
                             value = value.lstrip('¥￥:：').strip()
+                            value = re.sub(r'\([^)]*\)', '', value).strip()
                             if value:
                                 data[value_type] = value
                                 found = True
@@ -192,10 +211,13 @@ class WindowMonitor:
                     for line in lines:
                         if key in line:
                             # 尝试多种分隔符
-                            for sep in [':', '：', ' ']:
-                                parts = line.split(key + sep, 1)
+                            for sep in [':', '：']:
+                                parts = line.split(sep)
                                 if len(parts) > 1:
-                                    value = parts[1].strip().lstrip('¥￥:：').strip()
+                                    # 取最后一部分作为值
+                                    value = parts[-1].strip().lstrip('¥￥').strip()
+                                    # 过滤括号内容
+                                    value = re.sub(r'\([^)]*\)', '', value).strip()
                                     if value:
                                         data[value_type] = value
                                         found = True
