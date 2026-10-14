@@ -12,6 +12,7 @@ import re
 import requests
 from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
+from payment_parser_v2 import ContentMatchParser
 
 @dataclass
 class PaymentInfo:
@@ -156,110 +157,18 @@ class WindowMonitor:
             return ""
 
     def parse_payment_info(self, text: str, method: str, fields: Dict[str, str]) -> Optional[PaymentInfo]:
-        """解析支付信息"""
-        try:
-            lines = text.split('\n')
-            data = {}
-
-            # 打印识别的原始文本（调试用）
-            self.logger.info("=" * 50)
-            self.logger.info(f"OCR识别原始文本 ({method}):")
-            self.logger.info(text)
-            self.logger.info("=" * 50)
-            self.logger.info(f"需要查找的字段: {fields}")
-
-            # 查找键值对
-            for key, value_type in fields.items():
-                found = False
-
-                # 方式1: 查找key在某行，value在下一行
-                for i, line in enumerate(lines):
-                    if key in line:
-                        self.logger.debug(f"找到key '{key}' 在第{i}行: {line}")
-
-                        # 先尝试从当前行提取（可能是 "付款方信息:dream" 格式）
-                        if ':' in line or '：' in line:
-                            # 分割并取最后一部分
-                            for sep in [':', '：']:
-                                if sep in line:
-                                    parts = line.split(sep)
-                                    value = parts[-1].strip().lstrip('¥￥').strip()
-                                    # 过滤掉括号内容和标签
-                                    value = re.sub(r'\([^)]*\)', '', value).strip()
-                                    if value and not value.startswith('('):
-                                        data[value_type] = value
-                                        found = True
-                                        self.logger.info(f"✓ 找到 {key} = {value} (当前行提取)")
-                                        break
-                            if found:
-                                break
-
-                        # 如果当前行没找到，尝试下一行
-                        if not found and i + 1 < len(lines):
-                            value = lines[i + 1].strip()
-                            # 清理符号和括号内容
-                            value = value.lstrip('¥￥:：').strip()
-                            value = re.sub(r'\([^)]*\)', '', value).strip()
-                            if value:
-                                data[value_type] = value
-                                found = True
-                                self.logger.info(f"✓ 找到 {key} = {value} (下一行)")
-                                break
-
-                # 方式2: 尝试在同一行查找(键:值格式)
-                if not found:
-                    for line in lines:
-                        if key in line:
-                            # 尝试多种分隔符
-                            for sep in [':', '：']:
-                                parts = line.split(sep)
-                                if len(parts) > 1:
-                                    # 取最后一部分作为值
-                                    value = parts[-1].strip().lstrip('¥￥').strip()
-                                    # 过滤括号内容
-                                    value = re.sub(r'\([^)]*\)', '', value).strip()
-                                    if value:
-                                        data[value_type] = value
-                                        found = True
-                                        self.logger.info(f"✓ 找到 {key} = {value} (同一行)")
-                                        break
-                            if found:
-                                break
-
-                if not found:
-                    self.logger.warning(f"✗ 未找到字段 '{key}'")
-                    self.logger.debug(f"所有识别的行: {lines}")
-                    return None
-
-            # 验证必需字段
-            if 'player' not in data or 'product' not in data or 'amount' not in data:
-                self.logger.error(f"缺少必需字段! 当前数据: {data}")
-                return None
-
-            # 解析金额
-            amount_str = data['amount']
-            amount_match = re.search(r'(\d+\.?\d*)', amount_str)
-            if not amount_match:
-                self.logger.error(f"无法解析金额: {amount_str}")
-                return None
-            amount = float(amount_match.group(1))
-
-            payment = PaymentInfo(
-                method=method,
-                player=data['player'],
-                product=data['product'],
-                amount=amount,
-                raw_data=data
-            )
-
-            self.logger.info(f"✓ 解析成功: {payment.player} - {payment.product} - ¥{payment.amount}")
-            return payment
-
-        except Exception as e:
-            self.logger.error(f"解析失败: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-            return None
+        """解析支付信息 - 使用新的内容匹配解析器"""
+        # 获取商品列表（应该从服务器或配置文件读取）
+        products = [
+            {'name': '64个钻石块', 'price': 68.00},
+            {'name': '1月VIP会员', 'price': 68.00},
+            {'name': '铁套装', 'price': 50.00},
+            {'name': '32个金苹果', 'price': 100.00},
+        ]
+        
+        # 使用新解析器
+        parser = ContentMatchParser(self.logger, products)
+        return parser.parse(text, method)
 
     def send_to_server(self, payment: PaymentInfo) -> bool:
         """发送支付通知到服务器"""
