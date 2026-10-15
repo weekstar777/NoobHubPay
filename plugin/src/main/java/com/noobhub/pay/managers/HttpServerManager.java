@@ -75,6 +75,28 @@ public class HttpServerManager {
             // 解析请求
             JsonObject json = gson.fromJson(ctx.body(), JsonObject.class);
 
+            // 记录收到的JSON用于调试
+            plugin.getLogger().info("Received payment JSON: " + json.toString());
+
+            // 验证必需字段
+            if (!json.has("method") || json.get("method") == null) {
+                ctx.status(400).json(Map.of("error", "Missing 'method' field"));
+                plugin.getLogger().warning("Missing 'method' field in request");
+                return;
+            }
+
+            if (!json.has("player") || json.get("player") == null) {
+                ctx.status(400).json(Map.of("error", "Missing 'player' field"));
+                plugin.getLogger().warning("Missing 'player' field in request");
+                return;
+            }
+
+            if (!json.has("amount") || json.get("amount") == null) {
+                ctx.status(400).json(Map.of("error", "Missing 'amount' field"));
+                plugin.getLogger().warning("Missing 'amount' field in request");
+                return;
+            }
+
             String method = json.get("method").getAsString();
             String playerName = json.get("player").getAsString();
             double amount = json.get("amount").getAsDouble();
