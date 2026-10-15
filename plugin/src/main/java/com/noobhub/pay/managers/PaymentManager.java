@@ -182,6 +182,10 @@ public class PaymentManager {
             boolean allSuccess = true;
             for (String command : product.getCommands()) {
                 String cmd = command.replace("{player}", player.getName());
+                // 去掉前导斜杠（dispatchCommand不需要）
+                if (cmd.startsWith("/")) {
+                    cmd = cmd.substring(1);
+                }
                 plugin.getLogger().info("Executing command: " + cmd);
 
                 boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
@@ -221,6 +225,10 @@ public class PaymentManager {
                 boolean allSuccess = true;
                 for (String command : product.getCommands()) {
                     String cmd = command.replace("{player}", player.getName());
+                    // 去掉前导斜杠（dispatchCommand不需要）
+                    if (cmd.startsWith("/")) {
+                        cmd = cmd.substring(1);
+                    }
                     plugin.getLogger().info("Executing command: " + cmd);
 
                     boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
