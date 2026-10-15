@@ -62,17 +62,14 @@ public class PaymentManager {
 
         // 检查玩家是否在线
         if (matchedPlayer.isOnline()) {
-            // 在线玩家：直接发货
+            // 在线玩家：异步发货（命令执行后会自动通知玩家）
             Player onlinePlayer = matchedPlayer.getPlayer();
-            boolean success = deliverProduct(onlinePlayer, product);
-            if (success) {
-                sendMessage(onlinePlayer, getMessage("payment-success"));
-                plugin.getLogger().info(String.format(
-                    "External payment processed (online): %s bought %s for %.2f via %s",
-                    onlinePlayer.getName(), product.getName(), notification.getAmount(), notification.getMethod()
-                ));
-            }
-            return success;
+            deliverProduct(onlinePlayer, product);
+            plugin.getLogger().info(String.format(
+                "External payment queued for delivery: %s - %s - %.2f via %s",
+                onlinePlayer.getName(), product.getName(), notification.getAmount(), notification.getMethod()
+            ));
+            return true;
         } else {
             // 离线玩家：添加到待发货队列
             pendingOrderManager.addPendingOrder(
@@ -162,35 +159,66 @@ public class PaymentManager {
             return false;
         }
 
-        // 发货
-        boolean success = deliverProduct(player, product);
-        if (success) {
-            sendMessage(player, getMessage("payment-success"));
-            plugin.getLogger().info(String.format(
-                "Vault payment processed: %s bought %s for %.2f",
-                player.getName(), product.getName(), product.getPrice()
-            ));
-        } else {
-            // 发货失败,退款
-            economy.depositPlayer(player, product.getPrice());
-            sendMessage(player, getMessage("payment-failed")
-                .replace("{reason}", "发货失败,已退款"));
-        }
+        // 发货（游戏货币支付在主线程，可以同步执行）
+        deliverProductSync(player, product);
+        plugin.getLogger().info(String.format(
+            "Vault payment processed: %s bought %s for %.2f",
+            player.getName(), product.getName(), product.getPrice()
+        ));
 
-        return success;
+        return true;
     }
 
     /**
-     * 发货
+     * 同步发货 - 用于游戏内命令
      */
-    private boolean deliverProduct(Player player, Product product) {
+    private void deliverProductSync(Player player, Product product) {
         try {
             plugin.getLogger().info(String.format(
-                "Delivering product '%s' to player %s",
+                "Delivering product '%s' to player %s (sync)",
                 product.getName(), player.getName()
             ));
 
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            boolean allSuccess = true;
+            for (String command : product.getCommands()) {
+                String cmd = command.replace("{player}", player.getName());
+                plugin.getLogger().info("Executing command: " + cmd);
+
+                boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+
+                if (result) {
+                    plugin.getLogger().info("Command executed successfully: " + cmd);
+                } else {
+                    plugin.getLogger().warning("Command execution failed: " + cmd);
+                    allSuccess = false;
+                }
+            }
+
+            // 立即通知结果
+            if (allSuccess) {
+                sendMessage(player, getMessage("payment-success"));
+            } else {
+                sendMessage(player, getMessage("payment-failed").replace("{reason}", "命令执行失败"));
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to deliver product: " + e.getMessage());
+            e.printStackTrace();
+            sendMessage(player, getMessage("payment-failed").replace("{reason}", e.getMessage()));
+        }
+    }
+
+    /**
+     * 发货 - 异步执行命令并在完成后通知玩家
+     */
+    private void deliverProduct(Player player, Product product) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            try {
+                plugin.getLogger().info(String.format(
+                    "Delivering product '%s' to player %s",
+                    product.getName(), player.getName()
+                ));
+
+                boolean allSuccess = true;
                 for (String command : product.getCommands()) {
                     String cmd = command.replace("{player}", player.getName());
                     plugin.getLogger().info("Executing command: " + cmd);
@@ -201,15 +229,30 @@ public class PaymentManager {
                         plugin.getLogger().info("Command executed successfully: " + cmd);
                     } else {
                         plugin.getLogger().warning("Command execution failed: " + cmd);
+                        allSuccess = false;
                     }
                 }
-            });
-            return true;
-        } catch (Exception e) {
-            plugin.getLogger().severe("Failed to deliver product: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
+
+                // 命令执行完后才通知玩家
+                if (allSuccess) {
+                    sendMessage(player, getMessage("payment-success"));
+                    plugin.getLogger().info(String.format(
+                        "Product delivered successfully: %s -> %s",
+                        product.getName(), player.getName()
+                    ));
+                } else {
+                    sendMessage(player, getMessage("payment-failed").replace("{reason}", "命令执行失败"));
+                    plugin.getLogger().warning(String.format(
+                        "Product delivery failed: %s -> %s",
+                        product.getName(), player.getName()
+                    ));
+                }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Failed to deliver product: " + e.getMessage());
+                e.printStackTrace();
+                sendMessage(player, getMessage("payment-failed").replace("{reason}", e.getMessage()));
+            }
+        });
     }
 
     /**
