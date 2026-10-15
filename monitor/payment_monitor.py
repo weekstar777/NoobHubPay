@@ -41,8 +41,8 @@ class WindowMonitor:
         self.ocr_reader = None
         self._init_ocr()
 
-        # 已处理的记录(防重复)
-        self.processed_payments = set()
+        # 订单序号跟踪（防重复）
+        self.last_order_number = {}  # {method: 最后处理的序号}
 
         # 调试模式：保存截图
         self.debug_mode = self.config.get('debug', {}).get('enabled', False)
@@ -153,6 +153,19 @@ class WindowMonitor:
             self.logger.error(f"OCR failed: {e}")
             return ""
 
+    def extract_order_number(self, summary_text: str) -> Optional[int]:
+        """从汇总文本中提取订单序号（今日第x笔）"""
+        patterns = [
+            r'第\s*(\d+)\s*笔',
+            r'第(\d+)笔',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, summary_text)
+            if match:
+                return int(match.group(1))
+        return None
+
     def recognize_regions(self, hwnd: int, regions: Dict[str, Dict]) -> Dict[str, str]:
         """识别所有配置的区域"""
         results = {}
@@ -246,17 +259,28 @@ class WindowMonitor:
 
         regions_data = self.recognize_regions(hwnd, regions)
 
+        # 检查订单序号（防重复）
+        summary_text = regions_data.get('汇总', '')
+        if summary_text:
+            order_number = self.extract_order_number(summary_text)
+            if order_number:
+                last_number = self.last_order_number.get(method, 0)
+                if order_number <= last_number:
+                    self.logger.debug(f"Same order detected: 第{order_number}笔 (last: 第{last_number}笔)")
+                    return
+                self.logger.info(f"New order detected: 第{order_number}笔 (previous: 第{last_number}笔)")
+            else:
+                self.logger.warning(f"Cannot extract order number from: {summary_text}")
+
         payment_info = self.parse_payment_info(regions_data, method)
         if not payment_info:
             return
 
-        payment_id = f"{payment_info.method}_{payment_info.player}_{payment_info.amount}"
-        if payment_id in self.processed_payments:
-            self.logger.debug(f"Duplicate payment ignored: {payment_id}")
-            return
-
         if self.send_to_server(payment_info):
-            self.processed_payments.add(payment_id)
+            # 更新最后处理的订单序号
+            if summary_text and order_number:
+                self.last_order_number[method] = order_number
+                self.logger.info(f"Updated last order number: 第{order_number}笔")
 
     def run(self):
         """主循环"""
