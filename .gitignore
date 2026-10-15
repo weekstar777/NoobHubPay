@@ -7,6 +7,7 @@ monitor/__pycache__/
 monitor/*.pyc
 monitor/*.log
 monitor/.easyocr/
+monitor/debug_screenshots/
 
 # IDE
 .idea/
@@ -18,5 +19,6 @@ monitor/.easyocr/
 monitor/config.json
 monitor/config.json.old
 
-# 日志
+# 临时文件
 *.log
+window_grid.png
