@@ -1,64 +1,72 @@
-# NoobHubPay - Minecraft多方式支付插件
+# NoobHubPay - Minecraft支付系统
 
-支持微信/支付宝/游戏货币三种支付方式的自动发货插件。
+支持微信/支付宝支付通知OCR识别，自动发货到Minecraft服务器。
 
-## 快速开始
+## 核心特性
 
-### 1. 配置
+- **区域识别**：识别窗口内特定位置的文字内容
+- **离线发货**：玩家离线时存储订单，上线自动发货
+- **智能匹配**：根据服务器已注册玩家自动匹配
+- **调试模式**：保存截图便于调试坐标问题
 
-```bash
-双击运行: setup.bat
-```
+## 安装步骤
 
-会生成随机密钥并创建配置文件。
+### 1. Monitor端（Python）
 
-**然后编辑两个文件,填入相同的密钥**:
-- `monitor\config.json` → `secret_key`
-- `plugins\NoobHubPay\config.yml` → `secret-key`
-
-### 2. 安装依赖
-
-**服务器端**:
-- Vault插件 (必需)
-- Essentials或其他经济插件
-
-**监控程序**:
+安装依赖：
 ```bash
 cd monitor
 pip install -r requirements.txt
 ```
 
-首次运行会下载PaddleOCR模型(约8MB),中文识别更准确。
+### 2. 配置坐标
 
-### 3. 启动
-
-1. 重启Minecraft服务器(加载插件)
-2. 运行监控: `cd monitor && start.bat`
-
-## 使用方式
-
-### 微信/支付宝支付
-
-1. 玩家转账时备注: `玩家ID 商品名称`
-2. 收款通知弹出
-3. 监控程序自动识别并发货
-
-### 游戏货币支付
-
-```
-/payadmin test 商品名称
+使用坐标辅助工具确定区域位置：
+```bash
+python coordinate_helper.py "服务通知"
 ```
 
-### 管理命令
+会生成 `window_grid.png`，打开查看网格坐标，找到要识别的区域。
 
-- `/payadmin status` - 查看状态
-- `/payadmin list` - 商品列表
-- `/payadmin reload` - 重载配置
+### 3. 编辑配置
 
-## 配置商品
+编辑 `monitor/config.json`：
+```json
+{
+  "wechat": {
+    "window_title": "服务通知",
+    "regions": {
+      "收款金额": {"x": 100, "y": 200, "width": 200, "height": 40},
+      "收款项": {"x": 100, "y": 250, "width": 300, "height": 40},
+      "付款方信息": {"x": 100, "y": 300, "width": 300, "height": 40}
+    }
+  },
+  "debug": {
+    "enabled": true,
+    "output_dir": "debug_screenshots"
+  }
+}
+```
 
-编辑 `plugins/NoobHubPay/config.yml`:
+**坐标说明**：
+- `x, y`：区域左上角相对于窗口客户区的坐标
+- `width, height`：区域的宽度和高度
+- 坐标是相对于窗口内容区域（不包括标题栏和边框）
 
+### 4. Plugin端（Java）
+
+编译插件：
+```bash
+cd plugin
+mvn clean package
+```
+
+复制到服务器：
+```bash
+cp target/NoobHubPay-1.0.0.jar <服务器路径>/plugins/
+```
+
+配置商品（`plugins/NoobHubPay/config.yml`）：
 ```yaml
 products:
   - name: "64个钻石块"
@@ -67,32 +75,113 @@ products:
       - "/give {player} minecraft:diamond_block 64"
 ```
 
-## 常见问题
+重启服务器。
 
-### setup.bat报错
-手动操作:
-1. 复制 `monitor/config.json.example` → `config.json`
-2. 随便输入32位字符作为密钥
-3. 两个配置文件使用相同密钥
+## 使用方法
 
-### OCR识别不准
-- 降低 `config.json` 中的 `confidence_threshold`
-- 确保窗口完整显示
-- 检查窗口标题是否匹配
-
-### 支付未发货
-1. 玩家是否在线? `/list`
-2. 商品是否存在? `/payadmin list`
-3. 查看日志: `logs/latest.log` 和 `monitor/payment_monitor.log`
-
-## 编译部署
+### 启动Monitor
 
 ```bash
-build.bat
+cd monitor
+双击运行 start.bat
 ```
 
-自动编译并部署到服务器plugins目录。
+或手动运行：
+```bash
+python payment_monitor.py
+```
+
+### 工作流程
+
+1. Monitor检测支付窗口
+2. 截取配置的区域并OCR识别
+3. 匹配商品名称和金额
+4. 发送到Plugin服务器
+5. Plugin匹配已注册玩家
+6. **在线玩家**：直接发货
+7. **离线玩家**：存储到 `pending_orders.json`
+8. 玩家上线时自动处理待发货订单
+
+## 调试模式
+
+启用调试模式会保存每次截图到 `debug_screenshots/` 目录：
+
+- `{时间}_{区域名}_raw.png` - 原始截图
+- `{时间}_{区域名}_processed.png` - 预处理后的截图
+
+**用途**：
+1. 确认坐标是否正确
+2. 检查OCR能否识别文字
+3. 调整区域位置和大小
+
+## 故障排查
+
+### 1. 无法识别文字
+
+**检查步骤**：
+1. 启用调试模式查看截图
+2. 使用 `coordinate_helper.py` 确认坐标
+3. 调整 `confidence_threshold`（降低到0.2或0.1）
+4. 确认窗口标题正确
+
+**示例**：
+```json
+{
+  "ocr": {
+    "confidence_threshold": 0.2
+  }
+}
+```
+
+### 2. 玩家匹配失败
+
+**原因**：
+- 玩家未在服务器注册过
+- 付款方信息区域识别内容不对
+
+**解决**：
+1. 查看日志中识别到的内容
+2. 确保玩家至少登录过一次服务器
+3. 支持模糊匹配（包含匹配）
+
+### 3. 订单未发货
+
+**检查**：
+1. 查看 `plugins/NoobHubPay/pending_orders.json`
+2. 确认玩家是否上线
+3. 查看服务器控制台日志
+
+### 4. 坐标不准确
+
+**步骤**：
+1. 运行 `coordinate_helper.py` 生成网格图
+2. 打开 `window_grid.png`
+3. 找到要识别的区域
+4. 记录左上角坐标和宽高
+5. 更新 `config.json`
+
+## 管理命令
+
+```
+/payadmin status  - 查看状态
+/payadmin list    - 商品列表
+/payadmin reload  - 重载配置
+```
+
+## 技术说明
+
+### 坐标系统
+
+使用 `ClientToScreen` 获取窗口客户区坐标，配置的坐标是相对于客户区的，避免了边框和标题栏的影响。
+
+### OCR引擎
+
+支持 EasyOCR（推荐）和 PaddleOCR，EasyOCR更稳定。
+
+### 离线发货
+
+订单存储在 `plugins/NoobHubPay/pending_orders.json`，玩家上线时自动检查并发货，发货成功后删除记录。
 
 ---
 
-**版本**: v1.0.1 | **协议**: MIT
+**版本**: v1.1.0 | **协议**: MIT

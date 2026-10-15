@@ -1,7 +1,7 @@
 import win32gui
 import win32con
 import win32ui
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import numpy as np
 import mss
 import mss.tools
@@ -10,6 +10,7 @@ import logging
 import json
 import re
 import requests
+import os
 from typing import Dict, Optional, Tuple, List
 from dataclasses import dataclass
 
@@ -19,7 +20,7 @@ class PaymentInfo:
     player: str
     product: str
     amount: float
-    regions_data: Dict[str, str]  # 各区域识别的原始数据
+    regions_data: Dict[str, str]
 
 class WindowMonitor:
     def __init__(self, config_path="config.json"):
@@ -51,6 +52,12 @@ class WindowMonitor:
             {'name': '铁套装', 'price': 50.00},
             {'name': '32个金苹果', 'price': 100.00},
         ]
+
+        # 调试模式：保存截图
+        self.debug_mode = self.config.get('debug', {}).get('enabled', False)
+        self.debug_dir = self.config.get('debug', {}).get('output_dir', 'debug_screenshots')
+        if self.debug_mode and not os.path.exists(self.debug_dir):
+            os.makedirs(self.debug_dir)
 
         self.logger.info("WindowMonitor initialized")
 
@@ -85,16 +92,16 @@ class WindowMonitor:
             return None
         return hwnd
 
-    def capture_region(self, hwnd: int, region: Dict) -> Optional[Image.Image]:
-        """截取窗口内的特定区域"""
+    def capture_region(self, hwnd: int, region: Dict, region_name: str = "") -> Optional[Image.Image]:
+        """截取窗口内的特定区域（相对于客户区）"""
         try:
-            # 获取窗口位置
-            rect = win32gui.GetWindowRect(hwnd)
-            win_x, win_y, _, _ = rect
+            # 获取客户区左上角在屏幕上的坐标
+            client_rect = win32gui.GetClientRect(hwnd)
+            client_left_top = win32gui.ClientToScreen(hwnd, (client_rect[0], client_rect[1]))
 
-            # 计算区域在屏幕上的绝对坐标
-            abs_x = win_x + region['x']
-            abs_y = win_y + region['y']
+            # 计算区域在屏幕上的绝对坐标（相对于客户区）
+            abs_x = client_left_top[0] + region['x']
+            abs_y = client_left_top[1] + region['y']
             width = region['width']
             height = region['height']
 
@@ -109,10 +116,24 @@ class WindowMonitor:
                 screenshot = sct.grab(monitor)
                 img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
 
+            # 调试模式：保存原始截图
+            if self.debug_mode and region_name:
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                debug_path = os.path.join(self.debug_dir, f"{timestamp}_{region_name}_raw.png")
+                img.save(debug_path)
+                self.logger.info(f"Debug: saved raw screenshot to {debug_path}")
+
             # 图像预处理：放大2倍+增强对比度
             img = img.resize((width * 2, height * 2), Image.LANCZOS)
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(1.5)
+
+            # 调试模式：保存预处理后的截图
+            if self.debug_mode and region_name:
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                debug_path = os.path.join(self.debug_dir, f"{timestamp}_{region_name}_processed.png")
+                img.save(debug_path)
+                self.logger.info(f"Debug: saved processed screenshot to {debug_path}")
 
             return img
         except Exception as e:
@@ -145,7 +166,7 @@ class WindowMonitor:
         """识别所有配置的区域"""
         results = {}
         for region_name, region_config in regions.items():
-            img = self.capture_region(hwnd, region_config)
+            img = self.capture_region(hwnd, region_config, region_name)
             if img:
                 text = self.ocr_image(img)
                 results[region_name] = text.strip()
@@ -156,7 +177,6 @@ class WindowMonitor:
 
     def match_product(self, product_text: str) -> Optional[Dict]:
         """根据收款项文本匹配商品"""
-        # 标准化文本：去除空格和特殊字符
         normalized = re.sub(r'[^\w一-龥]', '', product_text)
 
         for product in self.products:
@@ -168,11 +188,10 @@ class WindowMonitor:
 
     def extract_amount(self, amount_text: str) -> Optional[float]:
         """从金额文本中提取数值"""
-        # 尝试各种金额格式
         patterns = [
-            r'¥?\s*(\d+\.\d{2})',  # ¥68.00 或 68.00
-            r'(\d+\.\d+)\s*元',     # 68.00元
-            r'(\d+)',               # 纯数字
+            r'¥?\s*(\d+\.\d{2})',
+            r'(\d+\.\d+)\s*元',
+            r'(\d+)',
         ]
 
         for pattern in patterns:
@@ -203,7 +222,7 @@ class WindowMonitor:
                 self.logger.warning(f"Amount mismatch: {amount} vs {product['price']}")
                 return None
 
-            # 4. 提取玩家名（原始文本，服务器端会匹配已注册玩家）
+            # 4. 提取玩家名
             player_text = regions_data.get('付款方信息', '').strip()
             if not player_text:
                 self.logger.warning("No player info found")
@@ -254,20 +273,16 @@ class WindowMonitor:
         if not hwnd:
             return
 
-        # 识别各区域
         regions_data = self.recognize_regions(hwnd, regions)
 
-        # 解析支付信息
         payment_info = self.parse_payment_info(regions_data, method)
         if not payment_info:
             return
 
-        # 防重复：生成唯一标识
         payment_id = f"{payment_info.method}_{payment_info.player}_{payment_info.product}_{payment_info.amount}"
         if payment_id in self.processed_payments:
             return
 
-        # 发送到服务器
         if self.send_to_server(payment_info):
             self.processed_payments.add(payment_id)
 
@@ -277,7 +292,6 @@ class WindowMonitor:
 
         while True:
             try:
-                # 检查微信支付
                 if self.config['wechat']['enabled']:
                     self.check_window(
                         'wechat',
@@ -285,7 +299,6 @@ class WindowMonitor:
                         self.config['wechat']['regions']
                     )
 
-                # 检查支付宝
                 if self.config['alipay']['enabled']:
                     self.check_window(
                         'alipay',
@@ -293,7 +306,6 @@ class WindowMonitor:
                         self.config['alipay']['regions']
                     )
 
-                # 使用最小的检查间隔
                 intervals = []
                 if self.config['wechat']['enabled']:
                     intervals.append(self.config['wechat']['check_interval'])
