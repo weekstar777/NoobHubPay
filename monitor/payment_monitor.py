@@ -18,7 +18,6 @@ from dataclasses import dataclass
 class PaymentInfo:
     method: str
     player: str
-    product: str
     amount: float
     regions_data: Dict[str, str]
 
@@ -44,15 +43,6 @@ class WindowMonitor:
 
         # 已处理的记录(防重复)
         self.processed_payments = set()
-
-        # 加载商品列表（价格必须唯一，用于匹配）
-        self.products = [
-            {'name': '64个钻石块', 'price': 68.00},
-            {'name': '1月VIP会员', 'price': 88.00},
-            {'name': '铁套装', 'price': 50.00},
-            {'name': '32个金苹果', 'price': 100.00},
-            {'name': '钻石套装', 'price': 150.00},
-        ]
 
         # 调试模式：保存截图
         self.debug_mode = self.config.get('debug', {}).get('enabled', False)
@@ -176,14 +166,6 @@ class WindowMonitor:
                 results[region_name] = ""
         return results
 
-    def match_product_by_price(self, amount: float) -> Optional[Dict]:
-        """根据价格匹配商品"""
-        for product in self.products:
-            if abs(product['price'] - amount) < 0.01:
-                self.logger.info(f"Matched product by price: {product['name']} (¥{amount})")
-                return product
-        return None
-
     def extract_amount(self, amount_text: str) -> Optional[float]:
         """从金额文本中提取数值"""
         patterns = [
@@ -199,7 +181,7 @@ class WindowMonitor:
         return None
 
     def parse_payment_info(self, regions_data: Dict[str, str], method: str) -> Optional[PaymentInfo]:
-        """解析支付信息 - 按金额匹配商品"""
+        """解析支付信息 - 只提取金额和玩家名，不验证商品"""
         try:
             # 1. 提取金额
             amount_text = regions_data.get('收款金额', '')
@@ -208,13 +190,7 @@ class WindowMonitor:
                 self.logger.warning(f"No amount extracted from: {amount_text}")
                 return None
 
-            # 2. 根据金额匹配商品
-            product = self.match_product_by_price(amount)
-            if not product:
-                self.logger.warning(f"No product matched for amount: ¥{amount}")
-                return None
-
-            # 3. 提取玩家名
+            # 2. 提取玩家名
             player_text = regions_data.get('付款方信息', '').strip()
             if not player_text:
                 self.logger.warning("No player info found")
@@ -223,7 +199,6 @@ class WindowMonitor:
             return PaymentInfo(
                 method=method,
                 player=player_text,
-                product=product['name'],
                 amount=amount,
                 regions_data=regions_data
             )
@@ -237,10 +212,11 @@ class WindowMonitor:
             data = {
                 'method': payment_info.method,
                 'player': payment_info.player,
-                'product': payment_info.product,
                 'amount': payment_info.amount,
                 'regions_data': payment_info.regions_data
             }
+
+            self.logger.info(f"Sending payment to server: {payment_info.player} - ¥{payment_info.amount}")
 
             response = requests.post(
                 self.config['http_server']['url'],
@@ -250,11 +226,14 @@ class WindowMonitor:
             )
 
             if response.status_code == 200:
-                self.logger.info(f"Payment sent successfully: {payment_info.player} - {payment_info.product}")
+                self.logger.info(f"Payment sent successfully: {payment_info.player} - ¥{payment_info.amount}")
                 return True
             else:
                 self.logger.error(f"Server error: {response.status_code} - {response.text}")
                 return False
+        except requests.exceptions.ConnectionError as e:
+            self.logger.error(f"Connection failed: Cannot connect to {self.config['http_server']['url']}")
+            return False
         except Exception as e:
             self.logger.error(f"Failed to send payment: {e}")
             return False
@@ -271,8 +250,9 @@ class WindowMonitor:
         if not payment_info:
             return
 
-        payment_id = f"{payment_info.method}_{payment_info.player}_{payment_info.product}_{payment_info.amount}"
+        payment_id = f"{payment_info.method}_{payment_info.player}_{payment_info.amount}"
         if payment_id in self.processed_payments:
+            self.logger.debug(f"Duplicate payment ignored: {payment_id}")
             return
 
         if self.send_to_server(payment_info):

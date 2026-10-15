@@ -32,7 +32,7 @@ public class PaymentManager {
 
     /**
      * 处理外部支付通知(微信/支付宝)
-     * 新逻辑：根据服务器已注册玩家名单匹配玩家
+     * 新逻辑：根据金额匹配商品，根据服务器已注册玩家匹配玩家
      */
     public boolean processExternalPayment(PaymentNotification notification) {
         // 生成交易唯一ID(防重复)
@@ -43,25 +43,17 @@ public class PaymentManager {
             return false;
         }
 
-        // 匹配已注册玩家
+        // 1. 根据金额匹配商品
+        Product product = plugin.getProductManager().getProductByPrice(notification.getAmount());
+        if (product == null) {
+            plugin.getLogger().warning("No product matched for amount: " + notification.getAmount());
+            return false;
+        }
+
+        // 2. 匹配已注册玩家
         OfflinePlayer matchedPlayer = matchPlayer(notification.getPlayerName());
         if (matchedPlayer == null) {
             plugin.getLogger().warning("No registered player matched: " + notification.getPlayerName());
-            return false;
-        }
-
-        Product product = plugin.getProductManager().getProductByFuzzyName(notification.getProductName());
-        if (product == null) {
-            plugin.getLogger().warning("Product not found: " + notification.getProductName());
-            return false;
-        }
-
-        // 验证金额
-        if (Math.abs(product.getPrice() - notification.getAmount()) > 0.01) {
-            plugin.getLogger().warning(String.format(
-                "Price mismatch for %s: expected %.2f, got %.2f",
-                product.getName(), product.getPrice(), notification.getAmount()
-            ));
             return false;
         }
 

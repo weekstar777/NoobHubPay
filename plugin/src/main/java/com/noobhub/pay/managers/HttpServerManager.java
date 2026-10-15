@@ -77,12 +77,14 @@ public class HttpServerManager {
 
             String method = json.get("method").getAsString();
             String playerName = json.get("player").getAsString();
-            String productName = json.get("product").getAsString();
             double amount = json.get("amount").getAsDouble();
 
+            // product字段现在是可选的（Monitor不再发送）
+            String productName = json.has("product") ? json.get("product").getAsString() : null;
+
             Map<String, String> rawData = new HashMap<>();
-            if (json.has("raw_data")) {
-                JsonObject rawDataJson = json.getAsJsonObject("raw_data");
+            if (json.has("regions_data")) {
+                JsonObject rawDataJson = json.getAsJsonObject("regions_data");
                 rawDataJson.entrySet().forEach(entry ->
                     rawData.put(entry.getKey(), entry.getValue().getAsString())
                 );
@@ -98,8 +100,8 @@ public class HttpServerManager {
             if (success) {
                 ctx.status(200).json(Map.of("success", true, "message", "Payment processed"));
                 plugin.getLogger().info(String.format(
-                    "Payment received: %s - %s - %.2f - %s",
-                    method, playerName, amount, productName
+                    "Payment received: %s - %s - %.2f",
+                    method, playerName, amount
                 ));
             } else {
                 ctx.status(400).json(Map.of("success", false, "message", "Payment failed"));

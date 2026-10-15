@@ -102,6 +102,16 @@ public class ProductManager {
             .orElse(null);
     }
 
+    /**
+     * 根据价格匹配商品（精确匹配）
+     */
+    public Product getProductByPrice(double price) {
+        return products.stream()
+            .filter(p -> Math.abs(p.getPrice() - price) < 0.01)
+            .findFirst()
+            .orElse(null);
+    }
+
     public List<String> getProductNames() {
         return products.stream()
             .map(Product::getName)
