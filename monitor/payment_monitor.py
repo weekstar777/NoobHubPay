@@ -45,12 +45,13 @@ class WindowMonitor:
         # 已处理的记录(防重复)
         self.processed_payments = set()
 
-        # 加载商品列表
+        # 加载商品列表（价格必须唯一，用于匹配）
         self.products = [
             {'name': '64个钻石块', 'price': 68.00},
-            {'name': '1月VIP会员', 'price': 68.00},
+            {'name': '1月VIP会员', 'price': 88.00},
             {'name': '铁套装', 'price': 50.00},
             {'name': '32个金苹果', 'price': 100.00},
+            {'name': '钻石套装', 'price': 150.00},
         ]
 
         # 调试模式：保存截图
@@ -175,14 +176,11 @@ class WindowMonitor:
                 results[region_name] = ""
         return results
 
-    def match_product(self, product_text: str) -> Optional[Dict]:
-        """根据收款项文本匹配商品"""
-        normalized = re.sub(r'[^\w一-龥]', '', product_text)
-
+    def match_product_by_price(self, amount: float) -> Optional[Dict]:
+        """根据价格匹配商品"""
         for product in self.products:
-            product_normalized = re.sub(r'[^\w一-龥]', '', product['name'])
-            if product_normalized in normalized or normalized in product_normalized:
-                self.logger.info(f"Matched product: {product['name']}")
+            if abs(product['price'] - amount) < 0.01:
+                self.logger.info(f"Matched product by price: {product['name']} (¥{amount})")
                 return product
         return None
 
@@ -201,28 +199,22 @@ class WindowMonitor:
         return None
 
     def parse_payment_info(self, regions_data: Dict[str, str], method: str) -> Optional[PaymentInfo]:
-        """解析支付信息"""
+        """解析支付信息 - 按金额匹配商品"""
         try:
-            # 1. 匹配商品
-            product_text = regions_data.get('收款项', '')
-            product = self.match_product(product_text)
-            if not product:
-                self.logger.warning(f"No product matched for: {product_text}")
-                return None
-
-            # 2. 提取金额
+            # 1. 提取金额
             amount_text = regions_data.get('收款金额', '')
             amount = self.extract_amount(amount_text)
             if not amount:
                 self.logger.warning(f"No amount extracted from: {amount_text}")
                 return None
 
-            # 3. 验证金额与商品价格一致
-            if abs(amount - product['price']) > 0.01:
-                self.logger.warning(f"Amount mismatch: {amount} vs {product['price']}")
+            # 2. 根据金额匹配商品
+            product = self.match_product_by_price(amount)
+            if not product:
+                self.logger.warning(f"No product matched for amount: ¥{amount}")
                 return None
 
-            # 4. 提取玩家名
+            # 3. 提取玩家名
             player_text = regions_data.get('付款方信息', '').strip()
             if not player_text:
                 self.logger.warning("No player info found")

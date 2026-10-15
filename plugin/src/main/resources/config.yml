@@ -4,16 +4,23 @@
 http-server:
   enabled: true
   port: 8787
-  secret-key: "change-this-to-random-secret-key"  # IMPORTANT: Change to random string
+  secret-key: "kVtQiaUjjlmueRLuww1aiqh0eNpCsKZY"  # 必须与monitor/config.json中的secret_key相同
   bind-address: "127.0.0.1"
 
-# Products
+# Products（每个商品价格必须唯一，用于通过金额匹配商品）
 products:
   - name: "64个钻石块"
     price: 68.00
     commands:
       - "/give {player} minecraft:diamond_block 64"
     description: "§6购买64个钻石块"
+
+  - name: "1月VIP会员"
+    price: 88.00
+    commands:
+      - "/lp user {player} parent add vip"
+      - "/lp user {player} permission set essentials.fly true 30d"
+    description: "§61个月VIP会员"
 
   - name: "铁套装"
     price: 50.00
@@ -30,6 +37,16 @@ products:
       - "/give {player} minecraft:golden_apple 32"
     description: "§e购买32个金苹果"
 
+  - name: "钻石套装"
+    price: 150.00
+    commands:
+      - "/give {player} minecraft:diamond_helmet 1"
+      - "/give {player} minecraft:diamond_chestplate 1"
+      - "/give {player} minecraft:diamond_leggings 1"
+      - "/give {player} minecraft:diamond_boots 1"
+      - "/give {player} minecraft:diamond_sword 1"
+    description: "§b购买一套钻石装备+钻石剑"
+
 # Messages
 messages:
   prefix: "§8[§6NoobHub支付§8]§r "
@@ -40,4 +57,3 @@ messages:
   player-offline: "§c玩家不在线,无法发货!"
   invalid-payment-method: "§c不支持的支付方式!"
   offline-order-delivered: "§a您在离线时购买的 §e{product} §a已发货!"
-
