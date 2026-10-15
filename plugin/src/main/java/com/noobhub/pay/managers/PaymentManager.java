@@ -185,10 +185,23 @@ public class PaymentManager {
      */
     private boolean deliverProduct(Player player, Product product) {
         try {
+            plugin.getLogger().info(String.format(
+                "Delivering product '%s' to player %s",
+                product.getName(), player.getName()
+            ));
+
             Bukkit.getScheduler().runTask(plugin, () -> {
                 for (String command : product.getCommands()) {
                     String cmd = command.replace("{player}", player.getName());
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+                    plugin.getLogger().info("Executing command: " + cmd);
+
+                    boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+
+                    if (result) {
+                        plugin.getLogger().info("Command executed successfully: " + cmd);
+                    } else {
+                        plugin.getLogger().warning("Command execution failed: " + cmd);
+                    }
                 }
             });
             return true;
