@@ -77,21 +77,16 @@ public class PendingOrderManager {
         List<PendingOrder> failedOrders = new ArrayList<>();
 
         for (PendingOrder order : orders) {
-            Product product = plugin.getProductManager().getProductByFuzzyName(order.getProductName());
+            Product product = plugin.getProductManager().getProductByName(order.getProductName());
             if (product == null) {
                 plugin.getLogger().warning("Product not found for pending order: " + order.getProductName());
-                continue; // 跳过此订单但不删除，等待管理员处理
+                failedOrders.add(order);
+                continue;
             }
 
-            boolean success = deliverProduct(player, product);
-            if (success) {
-                player.sendMessage(getMessage("prefix") + getMessage("offline-order-delivered")
-                    .replace("{product}", product.getName()));
-                plugin.getLogger().info(String.format(
-                    "Delivered pending order %s to %s",
-                    order.getOrderId(), player.getName()
-                ));
-            } else {
+            // 使用PaymentManager的发货逻辑
+            boolean success = plugin.getPaymentManager().deliverPendingOrder(player, product, order.getOrderId());
+            if (!success) {
                 failedOrders.add(order);
             }
         }
@@ -104,25 +99,6 @@ public class PendingOrderManager {
                 pendingOrders.put(playerId, failedOrders);
             }
             saveOrders();
-        }
-    }
-
-    /**
-     * 发货
-     */
-    private boolean deliverProduct(Player player, Product product) {
-        try {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                for (String command : product.getCommands()) {
-                    String cmd = command.replace("{player}", player.getName());
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-                }
-            });
-            return true;
-        } catch (Exception e) {
-            plugin.getLogger().severe("Failed to deliver product: " + e.getMessage());
-            e.printStackTrace();
-            return false;
         }
     }
 

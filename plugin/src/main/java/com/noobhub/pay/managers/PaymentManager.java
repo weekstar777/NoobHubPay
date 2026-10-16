@@ -264,6 +264,60 @@ public class PaymentManager {
     }
 
     /**
+     * 发货待处理订单 - 玩家上线时处理离线订单
+     */
+    public boolean deliverPendingOrder(Player player, Product product, String orderId) {
+        final boolean[] success = {false};
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            try {
+                plugin.getLogger().info(String.format(
+                    "Delivering pending order %s: %s to %s",
+                    orderId, product.getName(), player.getName()
+                ));
+
+                boolean allSuccess = true;
+                for (String command : product.getCommands()) {
+                    String cmd = command.replace("{player}", player.getName());
+                    if (cmd.startsWith("/")) {
+                        cmd = cmd.substring(1);
+                    }
+                    plugin.getLogger().info("Executing command: " + cmd);
+
+                    boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+
+                    if (result) {
+                        plugin.getLogger().info("Command executed successfully: " + cmd);
+                    } else {
+                        plugin.getLogger().warning("Command execution failed: " + cmd);
+                        allSuccess = false;
+                    }
+                }
+
+                if (allSuccess) {
+                    sendMessage(player, getMessage("offline-order-delivered")
+                        .replace("{product}", product.getName()));
+                    plugin.getLogger().info(String.format(
+                        "Pending order delivered: %s -> %s",
+                        orderId, player.getName()
+                    ));
+                    success[0] = true;
+                } else {
+                    plugin.getLogger().warning(String.format(
+                        "Pending order delivery failed: %s -> %s",
+                        orderId, player.getName()
+                    ));
+                }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Failed to deliver pending order: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+
+        return success[0];
+    }
+
+    /**
      * 生成交易唯一ID
      */
     private String generateTransactionId(PaymentNotification notification) {
