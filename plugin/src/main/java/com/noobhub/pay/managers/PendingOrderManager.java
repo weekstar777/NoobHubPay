@@ -33,23 +33,7 @@ public class PendingOrderManager {
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         this.pendingOrders = new HashMap<>();
 
-        // 详细记录文件路径
-        plugin.getLogger().info("=== PendingOrderManager Initialization ===");
-        plugin.getLogger().info("Data folder: " + plugin.getDataFolder().getAbsolutePath());
-        plugin.getLogger().info("Orders file: " + ordersFile.getAbsolutePath());
-        plugin.getLogger().info("File exists: " + ordersFile.exists());
-        if (ordersFile.exists()) {
-            plugin.getLogger().info("File size: " + ordersFile.length() + " bytes");
-        }
-
         loadOrders();
-
-        int totalOrders = pendingOrders.values().stream()
-            .mapToInt(List::size)
-            .sum();
-        plugin.getLogger().info("Loaded " + totalOrders + " orders from "
-            + pendingOrders.size() + " players");
-        plugin.getLogger().info("==========================================");
     }
 
     /**
@@ -109,24 +93,10 @@ public class PendingOrderManager {
 
         // 删除成功发货的订单
         if (failedOrders.size() < orders.size()) {
-            int successCount = orders.size() - failedOrders.size();
-            plugin.getLogger().info(String.format(
-                "Delivered %d/%d orders for player %s",
-                successCount, orders.size(), player.getName()
-            ));
-
             if (failedOrders.isEmpty()) {
                 pendingOrders.remove(playerId);
-                plugin.getLogger().info(String.format(
-                    "All orders delivered, removed player %s from pending list",
-                    player.getName()
-                ));
             } else {
                 pendingOrders.put(playerId, failedOrders);
-                plugin.getLogger().warning(String.format(
-                    "Kept %d failed orders for player %s",
-                    failedOrders.size(), player.getName()
-                ));
             }
             saveOrders();
         }
@@ -149,12 +119,6 @@ public class PendingOrderManager {
             List<PendingOrder> allOrders = pendingOrders.values().stream()
                 .flatMap(List::stream)
                 .collect(Collectors.toList());
-
-            plugin.getLogger().info(String.format(
-                "Saving %d pending orders from %d players",
-                allOrders.size(), pendingOrders.size()
-            ));
-
             gson.toJson(allOrders, writer);
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to save pending orders: " + e.getMessage());
@@ -167,7 +131,7 @@ public class PendingOrderManager {
      */
     private void loadOrders() {
         if (!ordersFile.exists()) {
-            plugin.getLogger().info("No pending orders file found, starting fresh");
+            plugin.getLogger().info("No pending orders file found");
             return;
         }
 
@@ -175,24 +139,14 @@ public class PendingOrderManager {
             Type listType = new TypeToken<List<PendingOrder>>(){}.getType();
             List<PendingOrder> allOrders = gson.fromJson(reader, listType);
 
-            if (allOrders != null && !allOrders.isEmpty()) {
+            if (allOrders != null) {
                 pendingOrders.clear();
-                plugin.getLogger().info("Loading " + allOrders.size() + " orders from file...");
-
                 for (PendingOrder order : allOrders) {
                     pendingOrders.computeIfAbsent(order.getPlayerId(), k -> new ArrayList<>()).add(order);
-                    plugin.getLogger().info(String.format(
-                        "  - Order %s: %s for player %s (%.2f)",
-                        order.getOrderId().substring(0, 8),
-                        order.getProductName(),
-                        order.getPlayerId().toString().substring(0, 8),
-                        order.getAmount()
-                    ));
                 }
-            } else {
-                plugin.getLogger().info("Orders file is empty or invalid");
+                plugin.getLogger().info("Loaded " + allOrders.size() + " pending orders");
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             plugin.getLogger().severe("Failed to load pending orders: " + e.getMessage());
             e.printStackTrace();
         }
