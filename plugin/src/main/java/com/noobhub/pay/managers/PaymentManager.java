@@ -7,58 +7,55 @@ import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
-
-import java.util.HashSet;
-import java.util.Set;
+import org.bukkit.plugin.RegisteredServiceProvider;
 
 public class PaymentManager {
     private final NoobHubPay plugin;
     private final Economy economy;
-    private final Set<String> processedTransactions;
     private final PendingOrderManager pendingOrderManager;
 
-    public PaymentManager(NoobHubPay plugin, Economy economy) {
+    public PaymentManager(NoobHubPay plugin) {
         this.plugin = plugin;
-        this.economy = economy;
-        this.processedTransactions = new HashSet<>();
         this.pendingOrderManager = new PendingOrderManager(plugin);
 
-        // 每30分钟清理一次已处理交易记录(防止内存泄漏)
-        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
-            processedTransactions.clear();
-            plugin.getLogger().info("Cleared processed transactions cache");
-        }, 36000L, 36000L);
+        // 初始化Vault经济系统
+        if (plugin.getServer().getPluginManager().getPlugin("Vault") != null) {
+            RegisteredServiceProvider<Economy> rsp = plugin.getServer().getServicesManager()
+                .getRegistration(Economy.class);
+            this.economy = (rsp != null) ? rsp.getProvider() : null;
+        } else {
+            this.economy = null;
+        }
     }
 
     /**
-     * 处理外部支付通知(微信/支付宝)
-     * 新逻辑：根据金额匹配商品，根据服务器已注册玩家匹配玩家
+     * 处理外部支付通知（微信/支付宝）
+     *
+     * 核心逻辑：
+     * 1. 根据金额匹配商品（商品价格必须唯一）
+     * 2. 根据玩家名匹配服务器已注册玩家
+     * 3. 在线玩家立即发货，离线玩家加入待发货队列
+     *
+     * 防重复：由Monitor端的订单序号机制保证，Plugin端不再处理
      */
     public boolean processExternalPayment(PaymentNotification notification) {
-        // 生成交易唯一ID(防重复)
-        String transactionId = generateTransactionId(notification);
-
-        if (processedTransactions.contains(transactionId)) {
-            plugin.getLogger().warning("Duplicate transaction detected: " + transactionId);
-            return false;
-        }
-
         // 1. 根据金额匹配商品
         Product product = plugin.getProductManager().getProductByPrice(notification.getAmount());
         if (product == null) {
-            plugin.getLogger().warning("No product matched for amount: " + notification.getAmount());
+            plugin.getLogger().warning(String.format(
+                "No product found for amount: %.2f", notification.getAmount()
+            ));
             return false;
         }
 
         // 2. 匹配已注册玩家
         OfflinePlayer matchedPlayer = matchPlayer(notification.getPlayerName());
         if (matchedPlayer == null) {
-            plugin.getLogger().warning("No registered player matched: " + notification.getPlayerName());
+            plugin.getLogger().warning(String.format(
+                "No registered player matched: %s", notification.getPlayerName()
+            ));
             return false;
         }
-
-        // 标记为已处理
-        processedTransactions.add(transactionId);
 
         // 检查玩家是否在线
         if (matchedPlayer.isOnline()) {
@@ -170,86 +167,81 @@ public class PaymentManager {
     }
 
     /**
-     * 同步发货 - 用于游戏内命令
+     * 核心：执行商品命令
+     *
+     * 所有发货逻辑复用此方法，确保命令执行的一致性
+     *
+     * @param player 玩家
+     * @param product 商品
+     * @return 是否全部成功
+     */
+    private boolean executeProductCommands(Player player, Product product) {
+        plugin.getLogger().info(String.format(
+            "Executing commands for product '%s' to player %s",
+            product.getName(), player.getName()
+        ));
+
+        boolean allSuccess = true;
+        for (String command : product.getCommands()) {
+            String cmd = command.replace("{player}", player.getName());
+
+            // 去掉前导斜杠（Bukkit.dispatchCommand不需要）
+            if (cmd.startsWith("/")) {
+                cmd = cmd.substring(1);
+            }
+
+            plugin.getLogger().info("Executing command: " + cmd);
+            boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+
+            if (result) {
+                plugin.getLogger().info("Command executed successfully: " + cmd);
+            } else {
+                plugin.getLogger().warning("Command execution failed: " + cmd);
+                allSuccess = false;
+            }
+        }
+
+        return allSuccess;
+    }
+
+    /**
+     * 游戏内货币购买发货（同步）
      */
     private void deliverProductSync(Player player, Product product) {
         try {
-            plugin.getLogger().info(String.format(
-                "Delivering product '%s' to player %s (sync)",
-                product.getName(), player.getName()
-            ));
+            boolean success = executeProductCommands(player, product);
 
-            boolean allSuccess = true;
-            for (String command : product.getCommands()) {
-                String cmd = command.replace("{player}", player.getName());
-                // 去掉前导斜杠（dispatchCommand不需要）
-                if (cmd.startsWith("/")) {
-                    cmd = cmd.substring(1);
-                }
-                plugin.getLogger().info("Executing command: " + cmd);
-
-                boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-
-                if (result) {
-                    plugin.getLogger().info("Command executed successfully: " + cmd);
-                } else {
-                    plugin.getLogger().warning("Command execution failed: " + cmd);
-                    allSuccess = false;
-                }
-            }
-
-            // 立即通知结果
-            if (allSuccess) {
+            if (success) {
                 sendMessage(player, getMessage("payment-success"));
             } else {
-                sendMessage(player, getMessage("payment-failed").replace("{reason}", "命令执行失败"));
+                sendMessage(player, getMessage("payment-failed")
+                    .replace("{reason}", "命令执行失败"));
             }
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to deliver product: " + e.getMessage());
             e.printStackTrace();
-            sendMessage(player, getMessage("payment-failed").replace("{reason}", e.getMessage()));
+            sendMessage(player, getMessage("payment-failed")
+                .replace("{reason}", e.getMessage()));
         }
     }
 
     /**
-     * 发货 - 异步执行命令并在完成后通知玩家
+     * 在线支付发货（异步）
      */
     private void deliverProduct(Player player, Product product) {
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
-                plugin.getLogger().info(String.format(
-                    "Delivering product '%s' to player %s",
-                    product.getName(), player.getName()
-                ));
+                boolean success = executeProductCommands(player, product);
 
-                boolean allSuccess = true;
-                for (String command : product.getCommands()) {
-                    String cmd = command.replace("{player}", player.getName());
-                    // 去掉前导斜杠（dispatchCommand不需要）
-                    if (cmd.startsWith("/")) {
-                        cmd = cmd.substring(1);
-                    }
-                    plugin.getLogger().info("Executing command: " + cmd);
-
-                    boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-
-                    if (result) {
-                        plugin.getLogger().info("Command executed successfully: " + cmd);
-                    } else {
-                        plugin.getLogger().warning("Command execution failed: " + cmd);
-                        allSuccess = false;
-                    }
-                }
-
-                // 命令执行完后才通知玩家
-                if (allSuccess) {
+                if (success) {
                     sendMessage(player, getMessage("payment-success"));
                     plugin.getLogger().info(String.format(
-                        "Product delivered successfully: %s -> %s",
+                        "Product delivered: %s -> %s",
                         product.getName(), player.getName()
                     ));
                 } else {
-                    sendMessage(player, getMessage("payment-failed").replace("{reason}", "命令执行失败"));
+                    sendMessage(player, getMessage("payment-failed")
+                        .replace("{reason}", "命令执行失败"));
                     plugin.getLogger().warning(String.format(
                         "Product delivery failed: %s -> %s",
                         product.getName(), player.getName()
@@ -258,13 +250,14 @@ public class PaymentManager {
             } catch (Exception e) {
                 plugin.getLogger().severe("Failed to deliver product: " + e.getMessage());
                 e.printStackTrace();
-                sendMessage(player, getMessage("payment-failed").replace("{reason}", e.getMessage()));
+                sendMessage(player, getMessage("payment-failed")
+                    .replace("{reason}", e.getMessage()));
             }
         });
     }
 
     /**
-     * 发货待处理订单 - 玩家上线时处理离线订单
+     * 离线订单发货（异步）
      */
     public boolean deliverPendingOrder(Player player, Product product, String orderId) {
         final boolean[] success = {false};
@@ -276,25 +269,9 @@ public class PaymentManager {
                     orderId, product.getName(), player.getName()
                 ));
 
-                boolean allSuccess = true;
-                for (String command : product.getCommands()) {
-                    String cmd = command.replace("{player}", player.getName());
-                    if (cmd.startsWith("/")) {
-                        cmd = cmd.substring(1);
-                    }
-                    plugin.getLogger().info("Executing command: " + cmd);
+                boolean result = executeProductCommands(player, product);
 
-                    boolean result = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-
-                    if (result) {
-                        plugin.getLogger().info("Command executed successfully: " + cmd);
-                    } else {
-                        plugin.getLogger().warning("Command execution failed: " + cmd);
-                        allSuccess = false;
-                    }
-                }
-
-                if (allSuccess) {
+                if (result) {
                     sendMessage(player, getMessage("offline-order-delivered")
                         .replace("{product}", product.getName()));
                     plugin.getLogger().info(String.format(
@@ -315,19 +292,6 @@ public class PaymentManager {
         });
 
         return success[0];
-    }
-
-    /**
-     * 生成交易唯一ID
-     */
-    private String generateTransactionId(PaymentNotification notification) {
-        return String.format("%s_%s_%s_%.2f_%d",
-            notification.getMethod(),
-            notification.getPlayerName(),
-            notification.getProductName(),
-            notification.getAmount(),
-            notification.getTimestamp() / 10000 // 10秒内的交易视为同一笔
-        );
     }
 
     private void sendMessage(Player player, String message) {

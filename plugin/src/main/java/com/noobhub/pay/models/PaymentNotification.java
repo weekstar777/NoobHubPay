@@ -2,10 +2,18 @@ package com.noobhub.pay.models;
 
 import java.util.Map;
 
+/**
+ * 支付通知模型
+ *
+ * 从Monitor接收的支付信息：
+ * - method: 支付方式（wechat/alipay）
+ * - playerName: 玩家名（从付款方信息提取）
+ * - amount: 金额（用于匹配商品）
+ * - rawData: 原始OCR识别数据
+ */
 public class PaymentNotification {
-    private String method; // wechat, alipay
+    private String method;
     private String playerName;
-    private String productName;
     private double amount;
     private Map<String, String> rawData;
     private long timestamp;
@@ -14,7 +22,7 @@ public class PaymentNotification {
                              double amount, Map<String, String> rawData) {
         this.method = method;
         this.playerName = playerName;
-        this.productName = productName;
+        // productName已废弃，Monitor不再发送，但保留参数兼容性
         this.amount = amount;
         this.rawData = rawData;
         this.timestamp = System.currentTimeMillis();
@@ -26,10 +34,6 @@ public class PaymentNotification {
 
     public String getPlayerName() {
         return playerName;
-    }
-
-    public String getProductName() {
-        return productName;
     }
 
     public double getAmount() {

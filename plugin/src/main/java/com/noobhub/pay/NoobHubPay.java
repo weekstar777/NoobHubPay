@@ -20,14 +20,14 @@ public class NoobHubPay extends JavaPlugin {
         // 保存默认配置
         saveDefaultConfig();
 
-        // 初始化Vault经济系统
+        // 初始化Vault经济系统（可选）
         if (!setupEconomy()) {
             getLogger().warning("Vault not found! In-game currency payment disabled");
         }
 
         // 初始化管理器
         productManager = new ProductManager(this);
-        paymentManager = new PaymentManager(this, economy);
+        paymentManager = new PaymentManager(this);
         httpServerManager = new HttpServerManager(this);
 
         // 注册监听器
