@@ -1,8 +1,8 @@
 package com.noobhub.pay.listeners;
 
 import com.noobhub.pay.NoobHubPay;
-import com.noobhub.pay.gui.StoreGUI;
 import com.noobhub.pay.models.Product;
+import com.noobhub.pay.utils.QRCodeMapRenderer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -15,9 +15,12 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.MapMeta;
+import org.bukkit.map.MapView;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -87,9 +90,8 @@ public class StoreListener implements Listener {
     }
 
     private ItemStack createQRCodeItem(Product product) {
-        Material material = parseMaterial(product.getQrcodeImage());
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
+        ItemStack map = new ItemStack(Material.FILLED_MAP);
+        MapMeta meta = (MapMeta) map.getItemMeta();
 
         if (meta != null) {
             meta.setDisplayName("§6§l付款码 §8- §e" + product.getName());
@@ -107,21 +109,34 @@ public class StoreListener implements Listener {
                 product.getName()
             );
 
-            item.setItemMeta(meta);
+            File qrImageFile = getQRCodeFile(product);
+            if (qrImageFile != null && qrImageFile.exists()) {
+                MapView mapView = Bukkit.createMap(plugin.getServer().getWorlds().get(0));
+                mapView.getRenderers().clear();
+                mapView.addRenderer(new QRCodeMapRenderer(qrImageFile, plugin.getLogger()));
+                meta.setMapView(mapView);
+            } else {
+                plugin.getLogger().warning("QR code image not found for product: " + product.getName());
+            }
+
+            map.setItemMeta(meta);
         }
 
-        return item;
+        return map;
     }
 
-    private Material parseMaterial(String imageName) {
-        if (imageName == null || imageName.isEmpty()) {
-            return Material.PAPER;
+    private File getQRCodeFile(Product product) {
+        String qrcodePath = product.getQrcodeImage();
+        if (qrcodePath == null || qrcodePath.isEmpty()) {
+            return null;
         }
-        try {
-            return Material.valueOf(imageName.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return Material.PAPER;
+
+        File file = new File(qrcodePath);
+        if (!file.isAbsolute()) {
+            file = new File(plugin.getDataFolder(), qrcodePath);
         }
+
+        return file;
     }
 
     private void scheduleItemRemoval(Player player, String productName) {
