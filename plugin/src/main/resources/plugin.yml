@@ -7,9 +7,9 @@ description: Multi-payment system supporting WeChat, Alipay and in-game currency
 depend: [Vault]
 
 commands:
-  pay:
-    description: Open payment GUI
-    usage: /pay
+  store:
+    description: Open store GUI
+    usage: /store
   payadmin:
     description: Admin commands for payment system
     usage: /payadmin <reload|test|list>
@@ -19,6 +19,6 @@ permissions:
   noobhub.pay.admin:
     description: Admin permission for payment system
     default: op
-  noobhub.pay.use:
-    description: Use payment system
+  noobhub.pay.store:
+    description: Use store GUI
     default: true

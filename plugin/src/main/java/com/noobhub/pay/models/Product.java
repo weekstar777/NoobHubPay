@@ -7,12 +7,16 @@ public class Product {
     private double price;
     private List<String> commands;
     private String description;
+    private String icon;
+    private String qrcodeImage;
 
-    public Product(String name, double price, List<String> commands, String description) {
+    public Product(String name, double price, List<String> commands, String description, String icon, String qrcodeImage) {
         this.name = name;
         this.price = price;
         this.commands = commands;
         this.description = description;
+        this.icon = icon;
+        this.qrcodeImage = qrcodeImage;
     }
 
     public String getName() {
@@ -45,5 +49,21 @@ public class Product {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getIcon() {
+        return icon;
+    }
+
+    public void setIcon(String icon) {
+        this.icon = icon;
+    }
+
+    public String getQrcodeImage() {
+        return qrcodeImage;
+    }
+
+    public void setQrcodeImage(String qrcodeImage) {
+        this.qrcodeImage = qrcodeImage;
     }
 }
