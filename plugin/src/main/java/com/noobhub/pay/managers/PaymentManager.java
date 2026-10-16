@@ -257,41 +257,39 @@ public class PaymentManager {
     }
 
     /**
-     * 离线订单发货（异步）
+     * 离线订单发货（同步执行）
+     *
+     * 注意：此方法在玩家登录事件中调用，已经在主线程，无需异步
      */
     public boolean deliverPendingOrder(Player player, Product product, String orderId) {
-        final boolean[] success = {false};
+        try {
+            plugin.getLogger().info(String.format(
+                "Delivering pending order %s: %s to %s",
+                orderId, product.getName(), player.getName()
+            ));
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            try {
+            boolean result = executeProductCommands(player, product);
+
+            if (result) {
+                sendMessage(player, getMessage("offline-order-delivered")
+                    .replace("{product}", product.getName()));
                 plugin.getLogger().info(String.format(
-                    "Delivering pending order %s: %s to %s",
-                    orderId, product.getName(), player.getName()
+                    "Pending order delivered: %s -> %s",
+                    orderId, player.getName()
                 ));
-
-                boolean result = executeProductCommands(player, product);
-
-                if (result) {
-                    sendMessage(player, getMessage("offline-order-delivered")
-                        .replace("{product}", product.getName()));
-                    plugin.getLogger().info(String.format(
-                        "Pending order delivered: %s -> %s",
-                        orderId, player.getName()
-                    ));
-                    success[0] = true;
-                } else {
-                    plugin.getLogger().warning(String.format(
-                        "Pending order delivery failed: %s -> %s",
-                        orderId, player.getName()
-                    ));
-                }
-            } catch (Exception e) {
-                plugin.getLogger().severe("Failed to deliver pending order: " + e.getMessage());
-                e.printStackTrace();
+                return true;
+            } else {
+                plugin.getLogger().warning(String.format(
+                    "Pending order delivery failed: %s -> %s",
+                    orderId, player.getName()
+                ));
+                return false;
             }
-        });
-
-        return success[0];
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to deliver pending order: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
     }
 
     private void sendMessage(Player player, String message) {
