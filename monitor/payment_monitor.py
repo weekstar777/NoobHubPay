@@ -174,7 +174,7 @@ class WindowMonitor:
             if img:
                 text = self.ocr_image(img)
                 results[region_name] = text.strip()
-                self.logger.info(f"Region '{region_name}': {text.strip()}")
+                self.logger.debug(f"Region '{region_name}': {text.strip()}")
             else:
                 results[region_name] = ""
         return results
