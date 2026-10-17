@@ -52,8 +52,13 @@ public class ProductManager {
                     String qrcodeImage = (String) map.getOrDefault("qrcode-image", "");
                     String type = (String) map.getOrDefault("type", "normal");
 
-                    if (name != null && !commands.isEmpty()) {
-                        products.add(new Product(name, price, commands, description, icon, qrcodeImage, type));
+                    if (name != null) {
+                        // cashback类型商品可以没有commands
+                        if (commands.isEmpty() && !"cashback".equalsIgnoreCase(type)) {
+                            plugin.getLogger().warning("Product " + name + " has no commands and is not cashback type");
+                        } else {
+                            products.add(new Product(name, price, commands, description, icon, qrcodeImage, type));
+                        }
                     }
                 } else {
                     plugin.getLogger().warning("Unknown product format: " + obj.getClass().getName());
@@ -76,8 +81,13 @@ public class ProductManager {
         String qrcodeImage = section.getString("qrcode-image", "");
         String type = section.getString("type", "normal");
 
-        if (name != null && !commands.isEmpty()) {
-            products.add(new Product(name, price, commands, description, icon, qrcodeImage, type));
+        if (name != null) {
+            // cashback类型商品可以没有commands
+            if (commands.isEmpty() && !"cashback".equalsIgnoreCase(type)) {
+                plugin.getLogger().warning("Product " + name + " has no commands and is not cashback type");
+            } else {
+                products.add(new Product(name, price, commands, description, icon, qrcodeImage, type));
+            }
         }
     }
 
