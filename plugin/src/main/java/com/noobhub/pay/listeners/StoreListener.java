@@ -190,7 +190,7 @@ public class StoreListener implements Listener {
 
         if (plugin.getRedPacketManager().addRedPacket(player, phone, cashAmount)) {
             player.sendMessage("§a§l1元现金红包兑换成功！");
-            player.sendMessage("§e等待3个工作日即可到账");
+            player.sendMessage("§e3个工作日后到账");
             player.sendMessage("§7已扣除 §c" + product.getPrice() + " §7游戏币");
         } else {
             economy.depositPlayer(player, product.getPrice());
