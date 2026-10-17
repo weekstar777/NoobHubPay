@@ -16,7 +16,7 @@ public class RedPacketManager {
 
     public RedPacketManager(NoobHubPay plugin) {
         this.plugin = plugin;
-        File monitorDir = new File("D:/project_collection/code_project/NoobHubPay/monitor");
+        File monitorDir = new File(plugin.getDataFolder(), "monitor");
         monitorDir.mkdirs();
         this.redPacketFile = new File(monitorDir, "兑换数据.txt");
     }
