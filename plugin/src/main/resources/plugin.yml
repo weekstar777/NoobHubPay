@@ -10,6 +10,9 @@ commands:
   store:
     description: Open store GUI
     usage: /store
+  phone:
+    description: Bind or change phone number
+    usage: /phone [phone] [old_phone new_phone]
   payadmin:
     description: Admin commands for payment system
     usage: /payadmin <reload|test|list>
@@ -21,4 +24,7 @@ permissions:
     default: op
   noobhub.pay.store:
     description: Use store GUI
+    default: true
+  noobhub.pay.phone:
+    description: Bind phone number
     default: true

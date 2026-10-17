@@ -1,12 +1,15 @@
 package com.noobhub.pay;
 
 import com.noobhub.pay.commands.PayAdminCommand;
+import com.noobhub.pay.commands.PhoneCommand;
 import com.noobhub.pay.commands.StoreCommand;
 import com.noobhub.pay.listeners.PlayerListener;
 import com.noobhub.pay.listeners.StoreListener;
 import com.noobhub.pay.managers.HttpServerManager;
 import com.noobhub.pay.managers.PaymentManager;
+import com.noobhub.pay.managers.PhoneManager;
 import com.noobhub.pay.managers.ProductManager;
+import com.noobhub.pay.managers.RedPacketManager;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -15,6 +18,8 @@ public class NoobHubPay extends JavaPlugin {
     private ProductManager productManager;
     private PaymentManager paymentManager;
     private HttpServerManager httpServerManager;
+    private PhoneManager phoneManager;
+    private RedPacketManager redPacketManager;
     private Economy economy;
 
     @Override
@@ -31,6 +36,8 @@ public class NoobHubPay extends JavaPlugin {
         productManager = new ProductManager(this);
         paymentManager = new PaymentManager(this);
         httpServerManager = new HttpServerManager(this);
+        phoneManager = new PhoneManager(this);
+        redPacketManager = new RedPacketManager(this);
 
         // 注册监听器
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
@@ -42,6 +49,9 @@ public class NoobHubPay extends JavaPlugin {
         // 注册命令
         StoreCommand storeCommand = new StoreCommand(this);
         getCommand("store").setExecutor(storeCommand);
+
+        PhoneCommand phoneCommand = new PhoneCommand(this);
+        getCommand("phone").setExecutor(phoneCommand);
 
         PayAdminCommand adminCommand = new PayAdminCommand(this);
         getCommand("payadmin").setExecutor(adminCommand);
@@ -91,5 +101,13 @@ public class NoobHubPay extends JavaPlugin {
 
     public Economy getEconomy() {
         return economy;
+    }
+
+    public PhoneManager getPhoneManager() {
+        return phoneManager;
+    }
+
+    public RedPacketManager getRedPacketManager() {
+        return redPacketManager;
     }
 }

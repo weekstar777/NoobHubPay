@@ -9,14 +9,16 @@ public class Product {
     private String description;
     private String icon;
     private String qrcodeImage;
+    private String type;
 
-    public Product(String name, double price, List<String> commands, String description, String icon, String qrcodeImage) {
+    public Product(String name, double price, List<String> commands, String description, String icon, String qrcodeImage, String type) {
         this.name = name;
         this.price = price;
         this.commands = commands;
         this.description = description;
         this.icon = icon;
         this.qrcodeImage = qrcodeImage;
+        this.type = type;
     }
 
     public String getName() {
@@ -65,5 +67,13 @@ public class Product {
 
     public void setQrcodeImage(String qrcodeImage) {
         this.qrcodeImage = qrcodeImage;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 }

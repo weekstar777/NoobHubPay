@@ -50,9 +50,10 @@ public class ProductManager {
                     String description = (String) map.getOrDefault("description", "");
                     String icon = (String) map.getOrDefault("icon", "PAPER");
                     String qrcodeImage = (String) map.getOrDefault("qrcode-image", "");
+                    String type = (String) map.getOrDefault("type", "normal");
 
                     if (name != null && !commands.isEmpty()) {
-                        products.add(new Product(name, price, commands, description, icon, qrcodeImage));
+                        products.add(new Product(name, price, commands, description, icon, qrcodeImage, type));
                     }
                 } else {
                     plugin.getLogger().warning("Unknown product format: " + obj.getClass().getName());
@@ -73,9 +74,10 @@ public class ProductManager {
         String description = section.getString("description", "");
         String icon = section.getString("icon", "PAPER");
         String qrcodeImage = section.getString("qrcode-image", "");
+        String type = section.getString("type", "normal");
 
         if (name != null && !commands.isEmpty()) {
-            products.add(new Product(name, price, commands, description, icon, qrcodeImage));
+            products.add(new Product(name, price, commands, description, icon, qrcodeImage, type));
         }
     }
 
