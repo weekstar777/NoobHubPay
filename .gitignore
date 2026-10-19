@@ -19,6 +19,9 @@ monitor/debug_screenshots/
 monitor/config.json
 monitor/config.json.old
 
+# 用户兑换数据(包含手机号等隐私信息)
+monitor/兑换数据.txt
+
 # 临时文件
 *.log
 window_grid.png
