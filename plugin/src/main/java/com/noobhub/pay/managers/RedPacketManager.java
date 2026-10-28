@@ -16,9 +16,7 @@ public class RedPacketManager {
 
     public RedPacketManager(NoobHubPay plugin) {
         this.plugin = plugin;
-        File monitorDir = new File(plugin.getDataFolder(), "monitor");
-        monitorDir.mkdirs();
-        this.redPacketFile = new File(monitorDir, "兑换数据.txt");
+        this.redPacketFile = new File(plugin.getDataFolder(), "兑换数据.txt");
     }
 
     public boolean addRedPacket(Player player, String phone, double amount) {
