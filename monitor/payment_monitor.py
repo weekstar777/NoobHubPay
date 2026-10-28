@@ -154,7 +154,7 @@ class WindowMonitor:
             return ""
 
     def extract_order_number(self, summary_text: str) -> Optional[int]:
-        """从汇总文本中提取订单序号（今日第x笔）"""
+        """从核实匹配文本中提取订单序号（今日第x笔）"""
         patterns = [
             r'第\s*(\d+)\s*笔',
             r'第(\d+)笔',
@@ -204,7 +204,7 @@ class WindowMonitor:
                 return None
 
             # 2. 提取玩家名
-            player_text = regions_data.get('付款方信息', '').strip()
+            player_text = regions_data.get('备注信息', '').strip()
             if not player_text:
                 self.logger.warning("No player info found")
                 return None
@@ -260,7 +260,7 @@ class WindowMonitor:
         regions_data = self.recognize_regions(hwnd, regions)
 
         # 检查订单序号（防重复）
-        summary_text = regions_data.get('汇总', '')
+        summary_text = regions_data.get('核实匹配', '')
         if summary_text:
             order_number = self.extract_order_number(summary_text)
             if order_number:

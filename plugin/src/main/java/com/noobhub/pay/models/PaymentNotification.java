@@ -7,7 +7,7 @@ import java.util.Map;
  *
  * 从Monitor接收的支付信息：
  * - method: 支付方式（wechat/alipay）
- * - playerName: 玩家名（从付款方信息提取）
+ * - playerName: 玩家名（从备注信息提取）
  * - amount: 金额（用于匹配商品）
  * - rawData: 原始OCR识别数据
  */
