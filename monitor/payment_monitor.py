@@ -41,8 +41,8 @@ class WindowMonitor:
         self.ocr_reader = None
         self._init_ocr()
 
-        # 订单序号跟踪（防重复）
-        self.last_order_number = {}  # {method: 最后处理的序号}
+        # 核实匹配跟踪（防重复）
+        self.last_match_text = {}  # {method: 最后识别的核实匹配文本}
 
         # 调试模式：保存截图
         self.debug_mode = self.config.get('debug', {}).get('enabled', False)
@@ -259,28 +259,24 @@ class WindowMonitor:
 
         regions_data = self.recognize_regions(hwnd, regions)
 
-        # 检查订单序号（防重复）
-        summary_text = regions_data.get('核实匹配', '')
-        if summary_text:
-            order_number = self.extract_order_number(summary_text)
-            if order_number:
-                last_number = self.last_order_number.get(method, 0)
-                if order_number <= last_number:
-                    self.logger.debug(f"Same order detected: 第{order_number}笔 (last: 第{last_number}笔)")
-                    return
-                self.logger.info(f"New order detected: 第{order_number}笔 (previous: 第{last_number}笔)")
-            else:
-                self.logger.warning(f"Cannot extract order number from: {summary_text}")
+        # 核实匹配：识别文本相同=重复订单跳过
+        # 微信识别"今日第x笔"，支付宝识别收款时间
+        match_text = regions_data.get('核实匹配', '').strip()
+        if match_text:
+            last_text = self.last_match_text.get(method, '')
+            if match_text == last_text:
+                self.logger.debug(f"{method} 核实匹配: 重复订单 ({match_text})")
+                return
+            self.logger.info(f"{method} 核实匹配: 新订单 ({match_text})")
 
         payment_info = self.parse_payment_info(regions_data, method)
         if not payment_info:
             return
 
         if self.send_to_server(payment_info):
-            # 更新最后处理的订单序号
-            if summary_text and order_number:
-                self.last_order_number[method] = order_number
-                self.logger.info(f"Updated last order number: 第{order_number}笔")
+            # 更新核实匹配文本
+            if match_text:
+                self.last_match_text[method] = match_text
 
     def run(self):
         """主循环"""
