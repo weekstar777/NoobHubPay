@@ -61,7 +61,7 @@ python coordinate_helper.py "微信支付"
     "window_title": "微信支付",
     "regions": {
       "收款金额": {"x": 60, "y": 185, "width": 270, "height": 80},
-      "付款方信息": {"x": 140, "y": 325, "width": 200, "height": 30}
+      "备注信息": {"x": 140, "y": 325, "width": 200, "height": 30}
     }
   },
   "server": {
@@ -114,7 +114,7 @@ products:
 ## 💰 使用流程
 
 1. 玩家微信转账指定金额（如¥68.00）
-2. 付款方备注填写游戏ID（如"dream"）
+2. 备注填写游戏ID（如"dream"）
 3. Monitor识别金额和玩家名
 4. 发送到Plugin HTTP服务器
 5. Plugin匹配商品和玩家
