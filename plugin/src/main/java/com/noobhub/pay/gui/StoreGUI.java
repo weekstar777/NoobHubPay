@@ -53,9 +53,16 @@ public class StoreGUI {
             List<String> lore = new ArrayList<>();
             lore.add("§7" + product.getDescription());
             lore.add("");
-            lore.add("§6价格: §a¥" + String.format("%.2f", product.getPrice()));
-            lore.add("");
-            lore.add("§e点击获取付款码");
+
+            // 1元现金红包使用美元符号，其他商品使用人民币符号
+            if ("1元现金红包".equals(product.getName())) {
+                lore.add("§6价格: §a$" + String.format("%.2f", product.getPrice()));
+            } else {
+                lore.add("§6价格: §a¥" + String.format("%.2f", product.getPrice()));
+                lore.add("");
+                lore.add("§e点击获取付款码");
+            }
+
             meta.setLore(lore);
 
             meta.getPersistentDataContainer().set(
